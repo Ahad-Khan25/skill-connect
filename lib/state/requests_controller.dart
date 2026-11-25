@@ -32,6 +32,10 @@ class RequestsController extends BaseController {
   bool hasPendingTo(String profileId) => _all.any((r) =>
       r.status == RequestStatus.pending && (r.to.id == profileId || r.from.id == profileId));
 
+  /// True if I already have a pending application/invitation for [teamId].
+  bool hasPendingForTeam(String teamId) =>
+      _all.any((r) => r.status == RequestStatus.pending && r.teamId == teamId);
+
   void start(String uid) {
     _uid = uid;
     final cached = _cache.read(uid, CacheKeys.requests);
@@ -88,19 +92,33 @@ class RequestsController extends BaseController {
     emit();
   }
 
-  Future<String?> send(String toProfileId, String message) async {
+  Future<String?> send(String toProfileId, String message, {String? forTeamId}) async {
     final v = Validators.requestMessage(message);
     if (v != null) return v;
     final me = _profile.me;
     if (me == null) return 'Please complete your profile first.';
     if (toProfileId == me.id) return 'You cannot send a request to yourself.';
     if (hasPendingTo(toProfileId)) return 'There is already a pending request with this student.';
-    if (_team.team?.members.any((m) => m.profile.id == toProfileId) ?? false) {
-      return 'This student is already in your team.';
+    if (forTeamId == null && (_team.team?.members.any((m) => m.profile.id == toProfileId) ?? false)) {
+      return 'This student is already in your active project team.';
     }
-    // If I own a team, the request is an invitation to that team.
-    final teamId = (_team.team?.iAmOwner ?? false) ? _team.team!.id : null;
+    // If forTeamId is provided (e.g. applying to an open team), use it;
+    // otherwise if I own the active team, invite them to my active project.
+    final teamId = forTeamId ?? ((_team.team?.iAmOwner ?? false) ? _team.team!.id : null);
     return _mutate(toProfileId, () => _repo.sendRequest(toProfileId, message.trim(), teamId: teamId));
+  }
+
+  /// Apply to join an open team posted by another student.
+  Future<String?> applyToTeam(Team targetTeam, String message) async {
+    final owner = targetTeam.owner?.profile ?? targetTeam.members.firstOrNull?.profile;
+    if (owner == null) return 'Team owner not found.';
+    final me = _profile.me;
+    if (me == null) return 'Please complete your profile first.';
+    if (targetTeam.hasMember(me.id)) return 'You are already a member of this team.';
+    if (hasPendingForTeam(targetTeam.id) || hasPendingTo(owner.id)) {
+      return 'You already have a pending application for this team.';
+    }
+    return send(owner.id, message, forTeamId: targetTeam.id);
   }
 
   Future<String?> accept(String id) =>

@@ -51,16 +51,17 @@ void main() {
       ));
       expect(invalidErr, isNotNull);
 
-      // Save valid profile
+      // Save valid profile (without asking for project requirements during profile setup!)
       final myProfile = Profile(
         name: 'Ali Khan',
+        university: 'COMSATS Wah',
         department: 'Computer Science',
         semester: 7,
-        projectType: 'FYP',
         skills: ['Flutter', 'Dart', 'Firebase'],
         interests: ['Mobile Apps', 'AI', 'Health Tech'],
         skillsNeeded: ['UI/UX Design', 'Figma', 'Machine Learning'],
         availability: ['Weekends', 'Evenings'],
+        workExperience: 'Flutter Intern at Systems Ltd (3 months).',
         bio: 'Building an AI health companion for my FYP.',
       );
       final saveErr = await app.profile.save(myProfile);
@@ -68,6 +69,13 @@ void main() {
       expect(app.profile.hasProfile, isTrue);
       expect(app.profile.state, LoadState.ready);
       expect(app.profile.completeness, 1.0);
+
+      // Edit profile later
+      expect(
+        await app.profile.save(myProfile.copyWith(workExperience: 'Senior Flutter Intern at Systems Ltd.')),
+        isNull,
+      );
+      expect(app.profile.me!.workExperience, 'Senior Flutter Intern at Systems Ltd.');
 
       // Wait for profile listener to trigger team & requests refresh
       await Future.delayed(const Duration(milliseconds: 1100));
@@ -83,12 +91,16 @@ void main() {
 
       app.discover.clearFilters();
       app.discover.setFilters(const DiscoverFilters(
+        university: 'COMSATS Wah',
         department: 'Software Engineering',
         projectType: 'FYP',
       ));
       expect(app.discover.hasActiveFilters, isTrue);
       expect(
-        app.discover.results.every((p) => p.department == 'Software Engineering' && p.projectType == 'FYP'),
+        app.discover.results.every((p) =>
+            p.university == 'COMSATS Wah' &&
+            p.department == 'Software Engineering' &&
+            p.projectType == 'FYP'),
         isTrue,
       );
       app.discover.clearFilters();
@@ -140,15 +152,54 @@ void main() {
       expect(appReopened.team.team, isNotNull);
       expect(appReopened.requests.received, isNotEmpty);
 
-      // 9. Leave team (owner disbands) & create custom team
+      // 9. Leave team (owner disbands) & create multiple custom projects with descriptions & requirements
       expect(await app.team.leave(), isNull);
       expect(app.team.team, isNull);
-      expect(app.team.state, LoadState.empty);
+      expect(app.team.myTeams, isEmpty);
 
-      expect(await app.team.create('Smart Health FYP', 'FYP', ['Designer', 'Tester']), isNull);
+      expect(
+        await app.team.create(
+          'Smart Health FYP',
+          'FYP',
+          ['Designer', 'Tester'],
+          description: 'AI-driven health monitoring app.',
+          requiredSkills: ['Figma', 'UI/UX Design'],
+          domainTags: ['Health Tech', 'AI'],
+        ),
+        isNull,
+      );
       expect(app.team.team, isNotNull);
       expect(app.team.team!.title, 'Smart Health FYP');
-      expect(app.team.team!.openRoles, containsAll(['Designer', 'Tester']));
+      expect(app.team.team!.description, 'AI-driven health monitoring app.');
+      final topForProject1 = app.match.matches.first.profile.id;
+
+      // Add a second project with completely different requirements (Web/FinTech) and verify matches change
+      expect(
+        await app.team.create(
+          'FinTrack Web App',
+          'Semester Project',
+          ['Developer'],
+          description: 'MERN stack campus finance tracker.',
+          requiredSkills: ['React', 'Node.js', 'SQL'],
+          domainTags: ['Web Development', 'FinTech'],
+        ),
+        isNull,
+      );
+      expect(app.team.myTeams.length, 2);
+      expect(app.team.team!.title, 'FinTrack Web App');
+      final topForProject2 = app.match.matches.first.profile.id;
+      expect(topForProject1 != topForProject2, isTrue);
+
+      // Browse open teams posted by other students & apply to join one
+      expect(app.team.openTeams, isNotEmpty);
+      final openTeam = app.team.openTeams.firstWhere(
+        (t) => !app.requests.hasPendingTo(t.owner!.profile.id),
+      );
+      expect(
+        await app.requests.applyToTeam(openTeam, 'I have Flutter & Dart experience and would love to join!'),
+        isNull,
+      );
+      expect(app.requests.hasPendingForTeam(openTeam.id), isTrue);
 
       // 10. Sign out clears user cache
       final uid = app.auth.userId!;

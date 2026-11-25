@@ -107,9 +107,11 @@ class DiscoverController extends BaseController {
       if (p.isMe || (me != null && p.id == me.id)) return false;
       if (q.isNotEmpty &&
           !p.name.toLowerCase().contains(q) &&
+          !p.university.toLowerCase().contains(q) &&
           !p.skills.any((s) => s.toLowerCase().contains(q))) {
         return false;
       }
+      if (f.university != null && p.university != f.university) return false;
       if (f.department != null && p.department != f.department) return false;
       if (f.semester != null && p.semester != f.semester) return false;
       if (f.skill != null && !p.skills.contains(f.skill)) return false;
@@ -119,8 +121,12 @@ class DiscoverController extends BaseController {
 
     switch (sort) {
       case SortOption.bestMatch when me != null:
-        final needed = MatchEngine.neededSkills(me, _team.team);
-        final scores = {for (final p in list) p.id: MatchEngine.score(me, p, needed: needed).score};
+        final activeTeam = _team.team;
+        final needed = MatchEngine.neededSkills(me, activeTeam);
+        final scores = {
+          for (final p in list)
+            p.id: MatchEngine.score(me, p, needed: needed, activeTeam: activeTeam).score
+        };
         list.sort((a, b) {
           final c = scores[b.id]!.compareTo(scores[a.id]!);
           return c != 0 ? c : a.name.compareTo(b.name);

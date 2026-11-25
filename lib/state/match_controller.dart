@@ -30,7 +30,19 @@ class MatchController extends BaseController {
     final me = _profile.me;
     final p = _discover.byId(profileId);
     if (me == null || p == null) return null;
-    return MatchEngine.score(me, p, needed: MatchEngine.neededSkills(me, _team.team));
+    final activeTeam = _team.team;
+    return MatchEngine.score(
+      me,
+      p,
+      needed: MatchEngine.neededSkills(me, activeTeam),
+      activeTeam: activeTeam,
+    );
+  }
+
+  /// Score how well an open project/team fits MY skills & interests (0-100).
+  int teamFitScore(Team team) {
+    final me = _profile.me;
+    return me == null ? 0 : MatchEngine.scoreTeamForMe(me, team);
   }
 
   /// Needed skills nobody on my team (including me) covers.

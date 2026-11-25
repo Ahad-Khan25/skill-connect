@@ -29,18 +29,26 @@ class MatchEngine {
   static const int wAvailability = 10;
   static const int wSemester = 10;
 
-  /// Skills I need: my skillsNeeded + skills of my team's open roles.
+  /// Skills I need: my skillsNeeded + active project's requiredSkills + skills of open roles.
   static Set<String> neededSkills(Profile me, Team? team) {
-    final needed = <String>{...me.skillsNeeded};
+    final needed = <String>{...me.skillsNeeded, ...?team?.requiredSkills};
     for (final role in team?.openRoles ?? const <String>[]) {
       needed.addAll(kRoleSkills[role] ?? const []);
     }
     return needed;
   }
 
-  /// Score a single candidate against me.
-  static MatchResult score(Profile me, Profile candidate, {Set<String>? needed}) {
-    needed ??= neededSkills(me, null);
+  /// Target interests/domains: active project's domainTags (if set) union my personal interests.
+  static Set<String> targetInterests(Profile me, Team? team) {
+    if (team != null && team.domainTags.isNotEmpty) {
+      return <String>{...team.domainTags, ...me.interests};
+    }
+    return me.interests.toSet();
+  }
+
+  /// Score a single candidate against me (and my active project/team if provided).
+  static MatchResult score(Profile me, Profile candidate, {Set<String>? needed, Team? activeTeam}) {
+    needed ??= neededSkills(me, activeTeam);
     final reasons = <String>[];
     double total = 0;
 
@@ -50,7 +58,8 @@ class MatchEngine {
       matched = candidate.skills.where(needed.contains).toList();
       total += wSkill * matched.length / needed.length;
       if (matched.isNotEmpty) {
-        reasons.add('Has ${_plural(matched.length, 'skill')} you need: ${_list(matched)}');
+        final targetLabel = activeTeam != null ? 'for "${activeTeam.title}"' : 'you need';
+        reasons.add('Has ${_plural(matched.length, 'skill')} $targetLabel: ${_list(matched)}');
       }
     } else {
       final mine = me.skills.toSet();
@@ -63,8 +72,8 @@ class MatchEngine {
       }
     }
 
-    // 2) Shared interests (25) – Jaccard similarity
-    final a = me.interests.toSet(), b = candidate.interests.toSet();
+    // 2) Shared interests / project domains (25) – Jaccard similarity
+    final a = targetInterests(me, activeTeam), b = candidate.interests.toSet();
     final inter = a.intersection(b);
     final union = a.union(b);
     if (union.isNotEmpty) total += wInterests * inter.length / union.length;
@@ -73,10 +82,13 @@ class MatchEngine {
       reasons.add('${_plural(inter.length, 'shared interest')}: ${_list(list)}');
     }
 
-    // 3) Project type (15)
-    if (me.projectType.isNotEmpty && me.projectType == candidate.projectType) {
+    // 3) Project type (15) – uses active project's type if selected, else my profile's projectType
+    final targetType = (activeTeam != null && activeTeam.projectType.isNotEmpty)
+        ? activeTeam.projectType
+        : me.projectType;
+    if (targetType.isNotEmpty && targetType == candidate.projectType) {
       total += wProjectType;
-      reasons.add(me.projectType == 'FYP' ? 'Both doing an FYP' : 'Both doing a ${me.projectType}');
+      reasons.add(targetType == 'FYP' ? 'Both doing an FYP' : 'Both doing a $targetType');
     }
 
     // 4) Availability (10)
@@ -120,13 +132,40 @@ class MatchEngine {
     final needed = neededSkills(me, team);
     final results = all
         .where((p) => !excluded.contains(p.id) && !p.isMe)
-        .map((p) => score(me, p, needed: needed))
+        .map((p) => score(me, p, needed: needed, activeTeam: team))
         .toList();
     results.sort((x, y) {
       final c = y.score.compareTo(x.score);
       return c != 0 ? c : x.profile.name.compareTo(y.profile.name);
     });
     return results;
+  }
+
+  /// Score how well an open project/team fits MY skills & interests (for the
+  /// "Browse & Join Teams" board).
+  static int scoreTeamForMe(Profile me, Team team) {
+    final needed = <String>{
+      ...team.requiredSkills,
+      for (final r in team.openRoles) ...(kRoleSkills[r] ?? const []),
+    };
+    double total = 0;
+    if (needed.isNotEmpty) {
+      final matched = me.skills.where(needed.contains).length;
+      total += 55 * (matched / needed.length);
+    } else {
+      total += 25;
+    }
+    final myInt = me.interests.toSet();
+    final teamDom = <String>{
+      ...team.domainTags,
+      for (final m in team.members) ...m.profile.interests,
+    };
+    final union = myInt.union(teamDom);
+    if (union.isNotEmpty) {
+      total += 25 * (myInt.intersection(teamDom).length / union.length);
+    }
+    if (me.projectType == team.projectType) total += 20;
+    return total.round().clamp(0, 100);
   }
 
   /// Needed skills that nobody on my team (including me) already has.

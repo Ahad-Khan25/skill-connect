@@ -36,9 +36,24 @@ abstract class Repository {
   Future<void> rejectRequest(String id);
   Future<void> cancelRequest(String id);
 
-  // ---- team ----
-  /// The team I belong to (owned team preferred), or null.
+  // ---- teams & projects ----
+  /// The primary/active team I belong to (owned team preferred), or null.
   Future<Team?> fetchMyTeam(String myProfileId);
-  Future<void> createTeam(String title, String projectType, List<String> rolesNeeded);
+
+  /// All teams/projects I own or belong to (supports multiple projects).
+  Future<List<Team>> fetchMyTeams(String myProfileId);
+
+  /// All public open teams posted by other students that are looking for teammates.
+  Future<List<Team>> fetchOpenTeams(String myProfileId);
+
+  Future<Team> createTeam(
+    String title,
+    String projectType,
+    List<String> rolesNeeded, {
+    String description = '',
+    List<String> requiredSkills = const [],
+    List<String> domainTags = const [],
+  });
+
   Future<void> leaveTeam(String teamId);
 }

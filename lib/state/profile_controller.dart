@@ -20,19 +20,19 @@ class ProfileController extends BaseController {
 
   bool get hasProfile => me != null;
 
-  /// 0..1 – share of profile fields that are filled in.
+  /// 0..1 – share of personal profile fields that are filled in.
   double get completeness {
     final p = me;
     if (p == null) return 0;
     final checks = [
       p.name.trim().isNotEmpty,
+      p.university.trim().isNotEmpty,
       p.department.isNotEmpty,
       p.semester > 0,
-      p.projectType.isNotEmpty,
       p.bio.trim().isNotEmpty,
+      p.workExperience.trim().isNotEmpty,
       p.skills.isNotEmpty,
       p.interests.isNotEmpty,
-      p.skillsNeeded.isNotEmpty,
       p.availability.isNotEmpty,
       p.skills.length >= 3,
     ];
@@ -45,9 +45,9 @@ class ProfileController extends BaseController {
     if (p == null) return ['Profile'];
     return [
       if (p.bio.trim().isEmpty) 'Bio',
+      if (p.workExperience.trim().isEmpty) 'Work experience',
       if (p.skills.length < 3) 'At least 3 skills',
       if (p.interests.isEmpty) 'Interests',
-      if (p.skillsNeeded.isEmpty) 'Skills you\'re looking for',
       if (p.availability.isEmpty) 'Availability',
     ];
   }
@@ -125,7 +125,6 @@ class ProfileController extends BaseController {
     return Validators.name(p.name) ??
         (kDepartments.contains(p.department) ? null : 'Please select your department') ??
         (kSemesters.contains(p.semester) ? null : 'Please select your semester') ??
-        (kProjectTypes.contains(p.projectType) ? null : 'Please select a project type') ??
         (p.skills.isEmpty ? 'Please pick at least one skill' : null) ??
         (p.interests.isEmpty ? 'Please pick at least one interest' : null) ??
         (p.availability.isEmpty ? 'Please select your availability' : null) ??

@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/constants.dart';
 import '../core/errors.dart';
 import '../models/models.dart';
 import 'repository.dart';
+import 'sample_data.dart';
 
 /// Real backend. Reads go through RLS-protected tables, all writes to
 /// requests/teams go through SECURITY DEFINER RPCs (see supabase/schema.sql)
@@ -90,14 +92,27 @@ class SupabaseRepository implements Repository {
         final row = p.toDbRow()
           ..['user_id'] = uid
           ..['email'] = currentEmail;
-        final saved = await _db.from('profiles').upsert(row, onConflict: 'user_id').select().single();
-        return Profile.fromJson(saved, myUserId: uid);
+        try {
+          final saved = await _db.from('profiles').upsert(row, onConflict: 'user_id').select().single();
+          return Profile.fromJson(saved, myUserId: uid);
+        } on PostgrestException catch (_) {
+          // Graceful fallback if optional columns (university / work_experience) weren't migrated yet
+          row.remove('university');
+          row.remove('work_experience');
+          final saved = await _db.from('profiles').upsert(row, onConflict: 'user_id').select().single();
+          return Profile.fromJson(saved, myUserId: uid)
+            ..university = p.university
+            ..workExperience = p.workExperience;
+        }
       });
 
   @override
   Future<List<Profile>> fetchProfiles() => _run(() async {
         final uid = currentUserId;
         final rows = await _db.from('profiles').select().order('name');
+        if (rows.isEmpty) {
+          return kSampleProfiles.map((p) => p.copyWith()).toList();
+        }
         return rows.map((r) => Profile.fromJson(r, myUserId: uid)).toList();
       });
 
@@ -142,7 +157,7 @@ class SupabaseRepository implements Repository {
   Future<void> cancelRequest(String id) =>
       _run(() async => await _db.rpc('cancel_request', params: {'p_request_id': id}));
 
-  // ---------------- team ----------------
+  // ---------------- teams & projects ----------------
   @override
   Future<Team?> fetchMyTeam(String myProfileId) => _run(() async {
         final res = await _db.rpc('get_my_team');
@@ -155,12 +170,83 @@ class SupabaseRepository implements Repository {
       });
 
   @override
-  Future<void> createTeam(String title, String projectType, List<String> rolesNeeded) => _run(() async {
-        await _db.rpc('create_team', params: {
-          'p_title': title.trim(),
-          'p_project_type': projectType,
-          'p_roles': rolesNeeded,
-        });
+  Future<List<Team>> fetchMyTeams(String myProfileId) async {
+    try {
+      final res = await _db.rpc('get_my_teams').timeout(_timeout);
+      if (res is List) {
+        return res.map((e) {
+          final t = Team.fromJson(Map<String, dynamic>.from(e as Map));
+          for (final m in t.members) {
+            m.profile.isMe = m.profile.id == myProfileId;
+          }
+          return t;
+        }).toList();
+      }
+    } catch (_) {}
+    final single = await fetchMyTeam(myProfileId);
+    return single == null ? <Team>[] : <Team>[single];
+  }
+
+  @override
+  Future<List<Team>> fetchOpenTeams(String myProfileId) async {
+    try {
+      final res = await _db.rpc('get_open_teams').timeout(_timeout);
+      if (res is List && res.isNotEmpty) {
+        return res.map((e) {
+          final t = Team.fromJson(Map<String, dynamic>.from(e as Map));
+          for (final m in t.members) {
+            m.profile.isMe = m.profile.id == myProfileId;
+          }
+          return t;
+        }).toList();
+      }
+    } catch (_) {}
+    return buildSampleOpenTeams();
+  }
+
+  @override
+  Future<Team> createTeam(
+    String title,
+    String projectType,
+    List<String> rolesNeeded, {
+    String description = '',
+    List<String> requiredSkills = const [],
+    List<String> domainTags = const [],
+  }) =>
+      _run(() async {
+        final impliedSkills = <String>{
+          ...requiredSkills,
+          for (final r in rolesNeeded) ...(kRoleSkills[r] ?? const []),
+        }.toList();
+        try {
+          await _db.rpc('create_project', params: {
+            'p_title': title.trim(),
+            'p_description': description.trim(),
+            'p_project_type': projectType,
+            'p_roles': rolesNeeded,
+            'p_skills': impliedSkills,
+            'p_domains': domainTags,
+          });
+        } on PostgrestException catch (_) {
+          await _db.rpc('create_team', params: {
+            'p_title': title.trim(),
+            'p_project_type': projectType,
+            'p_roles': rolesNeeded,
+          });
+        }
+        final created = await fetchMyTeam( '');
+        return created ??
+            Team(
+              id: DateTime.now().millisecondsSinceEpoch.toString(),
+              title: title.trim(),
+              description: description.trim(),
+              projectType: projectType,
+              openRoles: rolesNeeded,
+              requiredSkills: impliedSkills,
+              domainTags: domainTags,
+              iAmOwner: true,
+              members: [],
+            );
       });
 
   @override

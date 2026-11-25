@@ -7,16 +7,32 @@ import 'repository.dart';
 import 'sample_data.dart';
 
 /// In-memory backend that mirrors the Supabase RPC rules. Used when no
-/// Supabase key is configured, so the UI can be built and demoed offline.
+/// Supabase key is configured or FAKE_BACKEND=true.
 ///
-/// * Sign in with ANY valid email/password -> demo account with a filled profile.
+/// * Sign in with ANY valid email/password -> demo account with a filled profile,
+///   two sample projects (so you can switch projects and see matches change),
+///   and 5 open teams posted by other students to browse & apply to.
 /// * Sign up -> new account WITHOUT a profile (forces profile setup).
 class FakeRepository implements Repository {
   FakeRepository() {
     _profiles.addAll(kSampleProfiles.map((p) => p.copyWith()));
+    for (final t in buildSampleOpenTeams()) {
+      final ownerId = t.owner?.profile.id ?? t.members.first.profile.id;
+      _teams.add(_Team(
+        id: t.id,
+        ownerId: ownerId,
+        title: t.title,
+        description: t.description,
+        projectType: t.projectType,
+        rolesNeeded: List.of(t.openRoles),
+        requiredSkills: List.of(t.requiredSkills),
+        domainTags: List.of(t.domainTags),
+        members: t.members.map((m) => _Member(m.profile.id, m.role)).toList(),
+      ));
+    }
   }
 
-  static const _latency = Duration(milliseconds: 450);
+  static const _latency = Duration(milliseconds: 350);
   final _auth = StreamController<bool>.broadcast();
   final List<Profile> _profiles = [];
   final List<_Req> _requests = [];
@@ -74,7 +90,7 @@ class FakeRepository implements Repository {
     _uid = 'user-$e';
     _email = e;
     if (!_passwords.containsKey(e) && _me == null) {
-      // Unknown email in fake mode -> demo account with a ready profile.
+      // Unknown email in fake mode -> demo account with a ready profile + 2 projects.
       _passwords[e] = password;
       _signUpName = 'Ahad Khan';
       final me = Profile(
@@ -82,27 +98,49 @@ class FakeRepository implements Repository {
         userId: _uid,
         email: e,
         name: 'Ahad Khan',
+        university: 'COMSATS Wah',
         department: 'Computer Science',
         semester: 7,
         projectType: 'FYP',
-        skills: ['Flutter', 'Dart', 'Firebase'],
+        skills: ['Flutter', 'Dart', 'Firebase', 'Git'],
         interests: ['Mobile Apps', 'AI', 'Health Tech'],
-        skillsNeeded: ['UI/UX Design', 'Figma', 'Technical Writing', 'Machine Learning'],
+        skillsNeeded: ['UI/UX Design', 'Figma'],
         availability: ['Evenings', 'Weekends'],
-        bio: 'Flutter developer looking for a designer and an ML teammate for my FYP.',
+        workExperience: 'Flutter Mobile App Intern at Systems Ltd (Summer 2025); GDSC Mobile Lead.',
+        bio: 'Full-stack Flutter developer building AI & healthcare mobile solutions.',
       );
       _profiles.add(me);
       _seedForNewProfile(me);
-      // Sample team owned by the demo user.
+
+      // Demo project #1 (FYP - Health Tech + AI)
       _teams.add(_Team(
         id: _id(),
         ownerId: me.id,
-        title: 'MediTrack – Health Companion App',
+        title: 'MediTrack – AI Health Companion',
+        description: 'Cross-platform mobile health tracker with AI symptom triage, medication reminders, and doctor PDF reports.',
         projectType: 'FYP',
         rolesNeeded: ['Designer', 'Report Writer'],
+        requiredSkills: ['UI/UX Design', 'Figma', 'Technical Writing', 'Machine Learning'],
+        domainTags: ['Health Tech', 'AI', 'Mobile Apps'],
         members: [
           _Member(me.id, 'Owner'),
           _Member(sampleId(4), 'Data/ML Engineer'),
+        ],
+      ));
+
+      // Demo project #2 (Semester Project - Web & FinTech) so user can switch active projects
+      // and immediately see Smart Match recalculate!
+      _teams.add(_Team(
+        id: _id(),
+        ownerId: me.id,
+        title: 'PaySplit – Campus Expense Manager',
+        description: 'Semester project for Web Engineering: real-time bill splitting and hostel expense analytics dashboard.',
+        projectType: 'Semester Project',
+        rolesNeeded: ['Developer', 'Tester'],
+        requiredSkills: ['React', 'Node.js', 'SQL', 'Automation Testing'],
+        domainTags: ['Web Development', 'FinTech'],
+        members: [
+          _Member(me.id, 'Owner'),
         ],
       ));
     }
@@ -167,16 +205,20 @@ class FakeRepository implements Repository {
     await _delay();
     final list = _requests
         .where((r) => r.status != RequestStatus.cancelled && (r.from == myProfileId || r.to == myProfileId))
-        .map((r) => TeamRequest(
-              id: r.id,
-              from: _p(r.from).copyWith(isMe: r.from == myProfileId),
-              to: _p(r.to).copyWith(isMe: r.to == myProfileId),
-              message: r.message,
-              status: r.status,
-              createdAt: r.createdAt,
-              isSent: r.from == myProfileId,
-              teamId: r.teamId,
-            ))
+        .map((r) {
+          final t = r.teamId != null ? _teams.where((x) => x.id == r.teamId).firstOrNull : null;
+          return TeamRequest(
+            id: r.id,
+            from: _p(r.from).copyWith(isMe: r.from == myProfileId),
+            to: _p(r.to).copyWith(isMe: r.to == myProfileId),
+            message: r.message,
+            status: r.status,
+            createdAt: r.createdAt,
+            isSent: r.from == myProfileId,
+            teamId: r.teamId,
+            teamTitle: t?.title,
+          );
+        })
         .toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return list;
@@ -229,14 +271,17 @@ class FakeRepository implements Repository {
       // Invitation: the sender is already in that team, so I (receiver) join.
       if (team != null && team.members.any((m) => m.profileId == r.from)) joinerId = me.id;
     }
-    team ??= _myTeam(me.id);
+    team ??= _myPrimaryTeam(me.id);
     if (team == null) {
       team = _Team(
         id: _id(),
         ownerId: me.id,
-        title: "${me.name}'s Team",
+        title: "${me.name}'s Project Team",
+        description: 'Project team created by ${me.name}.',
         projectType: me.projectType,
         rolesNeeded: ['Developer', 'Designer', 'Tester', 'Report Writer'],
+        requiredSkills: List.of(me.skillsNeeded),
+        domainTags: List.of(me.interests),
         members: [_Member(me.id, 'Owner')],
       );
       _teams.add(team);
@@ -268,45 +313,85 @@ class FakeRepository implements Repository {
     r.status = RequestStatus.cancelled;
   }
 
-  // ---------------- team ----------------
-  _Team? _myTeam(String profileId) =>
+  // ---------------- teams & projects ----------------
+  _Team? _myPrimaryTeam(String profileId) =>
       _teams.where((t) => t.ownerId == profileId).firstOrNull ??
       _teams.reversed.where((t) => t.members.any((m) => m.profileId == profileId)).firstOrNull;
+
+  Team _toTeamModel(_Team t, String myProfileId) => Team(
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        projectType: t.projectType,
+        openRoles: List.of(t.rolesNeeded),
+        requiredSkills: List.of(t.requiredSkills),
+        domainTags: List.of(t.domainTags),
+        iAmOwner: t.ownerId == myProfileId,
+        members: t.members
+            .map((m) => TeamMember(
+                  profile: _p(m.profileId).copyWith(isMe: m.profileId == myProfileId),
+                  role: m.role,
+                  isOwner: m.profileId == t.ownerId,
+                ))
+            .toList(),
+      );
 
   @override
   Future<Team?> fetchMyTeam(String myProfileId) async {
     await _delay();
-    final t = _myTeam(myProfileId);
-    if (t == null) return null;
-    return Team(
-      id: t.id,
-      title: t.title,
-      projectType: t.projectType,
-      openRoles: List.of(t.rolesNeeded),
-      iAmOwner: t.ownerId == myProfileId,
-      members: t.members
-          .map((m) => TeamMember(
-                profile: _p(m.profileId).copyWith(isMe: m.profileId == myProfileId),
-                role: m.role,
-                isOwner: m.profileId == t.ownerId,
-              ))
-          .toList(),
-    );
+    final t = _myPrimaryTeam(myProfileId);
+    return t == null ? null : _toTeamModel(t, myProfileId);
   }
 
   @override
-  Future<void> createTeam(String title, String projectType, List<String> rolesNeeded) async {
+  Future<List<Team>> fetchMyTeams(String myProfileId) async {
+    await _delay();
+    return _teams
+        .where((t) => t.ownerId == myProfileId || t.members.any((m) => m.profileId == myProfileId))
+        .map((t) => _toTeamModel(t, myProfileId))
+        .toList();
+  }
+
+  @override
+  Future<List<Team>> fetchOpenTeams(String myProfileId) async {
+    await _delay();
+    return _teams
+        .where((t) =>
+            t.ownerId != myProfileId &&
+            !t.members.any((m) => m.profileId == myProfileId) &&
+            (t.rolesNeeded.isNotEmpty || t.requiredSkills.isNotEmpty))
+        .map((t) => _toTeamModel(t, myProfileId))
+        .toList();
+  }
+
+  @override
+  Future<Team> createTeam(
+    String title,
+    String projectType,
+    List<String> rolesNeeded, {
+    String description = '',
+    List<String> requiredSkills = const [],
+    List<String> domainTags = const [],
+  }) async {
     await _delay();
     final me = _requireMe();
-    if (_myTeam(me.id) != null) throw const AppException('You are already in a team. Leave it first.');
-    _teams.add(_Team(
+    final impliedSkills = <String>{
+      ...requiredSkills,
+      for (final r in rolesNeeded) ...(kRoleSkills[r] ?? const []),
+    }.toList();
+    final created = _Team(
       id: _id(),
       ownerId: me.id,
       title: title.trim(),
+      description: description.trim(),
       projectType: projectType,
       rolesNeeded: List.of(rolesNeeded),
+      requiredSkills: impliedSkills,
+      domainTags: domainTags.isNotEmpty ? List.of(domainTags) : List.of(me.interests),
       members: [_Member(me.id, 'Owner')],
-    ));
+    );
+    _teams.insert(0, created);
+    return _toTeamModel(created, me.id);
   }
 
   @override
@@ -321,7 +406,9 @@ class FakeRepository implements Repository {
       _teams.remove(t); // owner leaving disbands the team
     } else {
       t.members.remove(m);
-      if (kRoles.contains(m.role)) t.rolesNeeded.add(m.role);
+      if (kRoles.contains(m.role) && !t.rolesNeeded.contains(m.role)) {
+        t.rolesNeeded.add(m.role);
+      }
     }
   }
 }
@@ -369,11 +456,16 @@ class _Team {
     required this.id,
     required this.ownerId,
     required this.title,
+    this.description = '',
     required this.projectType,
     required this.rolesNeeded,
+    this.requiredSkills = const [],
+    this.domainTags = const [],
     required this.members,
   });
-  final String id, ownerId, title, projectType;
+  final String id, ownerId, title, description, projectType;
   final List<String> rolesNeeded;
+  final List<String> requiredSkills;
+  final List<String> domainTags;
   final List<_Member> members;
 }

@@ -7,7 +7,10 @@ import '../models/models.dart';
 import 'base_controller.dart';
 import 'profile_controller.dart';
 
-/// My team. state: ready (in a team) | empty (no team yet) | loading | error.
+/// Manages:
+/// * [myTeams]   – all projects/teams I own or belong to (multiple projects supported!)
+/// * [team]      – currently active project/team (switching this updates Smart Match!)
+/// * [openTeams] – public open teams posted by other students that I can apply to join.
 class TeamController extends BaseController {
   TeamController(this._repo, this._cache, this._profile);
 
@@ -17,18 +20,44 @@ class TeamController extends BaseController {
   String? _uid;
 
   Team? team;
+  List<Team> myTeams = [];
+  List<Team> openTeams = [];
   bool busy = false;
 
-  /// Load cached team instantly; network refresh happens once my profile is known.
+  /// Switch the active project used by Smart Match & Discover.
+  void selectActiveTeam(String? teamId) {
+    if (teamId == null) {
+      team = myTeams.firstOrNull;
+    } else {
+      team = myTeams.where((t) => t.id == teamId).firstOrNull ?? team;
+    }
+    emit();
+  }
+
+  /// Load cached team(s) instantly; network refresh happens once my profile is known.
   void start(String uid) {
     _uid = uid;
-    if (_cache.has(uid, CacheKeys.team)) {
+    final cachedMy = _cache.read(uid, CacheKeys.myTeams);
+    if (cachedMy is List) {
+      myTeams = cachedMy.map((e) => Team.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+      team = myTeams.firstOrNull;
+      state = myTeams.isEmpty ? LoadState.empty : LoadState.ready;
+    } else if (_cache.has(uid, CacheKeys.team)) {
       final cached = _cache.read(uid, CacheKeys.team);
       team = cached is Map ? Team.fromJson(Map<String, dynamic>.from(cached)) : null;
+      myTeams = team == null ? [] : [team!];
       state = team == null ? LoadState.empty : LoadState.ready;
     } else {
       team = null;
+      myTeams = [];
       state = LoadState.loading;
+    }
+
+    final cachedOpen = _cache.read(uid, CacheKeys.openTeams);
+    if (cachedOpen is List) {
+      openTeams = cachedOpen.map((e) => Team.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+    } else {
+      openTeams = [];
     }
     emit();
   }
@@ -39,35 +68,46 @@ class TeamController extends BaseController {
     if (uid == null) return;
     final myId = _profile.me?.id;
     if (myId == null) {
-      // No profile -> no team. If the profile failed to load, mirror that.
       if (_profile.state == LoadState.error && team == null) {
         state = LoadState.error;
         error = _profile.error;
       } else if (_profile.state == LoadState.empty) {
         team = null;
+        myTeams = [];
         state = LoadState.empty;
       }
       emit();
       return;
     }
-    if (team == null && state != LoadState.empty) {
+    if (myTeams.isEmpty && state != LoadState.empty) {
       state = LoadState.loading;
       emit();
     }
     try {
-      final t = await _repo.fetchMyTeam(myId);
+      final results = await Future.wait([
+        _repo.fetchMyTeams(myId),
+        _repo.fetchOpenTeams(myId),
+      ]);
       if (uid != _uid) return;
-      team = t;
+      final prevActiveId = team?.id;
+      myTeams = results[0];
+      openTeams = results[1];
+      team = (prevActiveId != null
+              ? myTeams.where((t) => t.id == prevActiveId).firstOrNull
+              : null) ??
+          myTeams.firstOrNull;
       offline = false;
       error = null;
-      state = t == null ? LoadState.empty : LoadState.ready;
-      await _cache.write(uid, CacheKeys.team, t?.toJson());
+      state = myTeams.isEmpty && openTeams.isEmpty ? LoadState.empty : LoadState.ready;
+      await _cache.write(uid, CacheKeys.team, team?.toJson());
+      await _cache.write(uid, CacheKeys.myTeams, myTeams.map((t) => t.toJson()).toList());
+      await _cache.write(uid, CacheKeys.openTeams, openTeams.map((t) => t.toJson()).toList());
     } catch (e) {
       final err = friendlyError(e);
       error = err.message;
-      if (_cache.has(uid, CacheKeys.team)) {
+      if (_cache.has(uid, CacheKeys.team) || _cache.has(uid, CacheKeys.myTeams)) {
         offline = err.isNetwork;
-        state = team == null ? LoadState.empty : LoadState.ready;
+        state = myTeams.isEmpty && openTeams.isEmpty ? LoadState.empty : LoadState.ready;
       } else {
         state = LoadState.error;
       }
@@ -75,21 +115,51 @@ class TeamController extends BaseController {
     emit();
   }
 
-  Future<String?> create(String title, String projectType, List<String> rolesNeeded) async {
+  /// Create a new project/team (multiple projects are allowed; newly created
+  /// project becomes the active project for Smart Match).
+  Future<String?> create(
+    String title,
+    String projectType,
+    List<String> rolesNeeded, {
+    String description = '',
+    List<String> requiredSkills = const [],
+    List<String> domainTags = const [],
+  }) async {
     final v = Validators.teamTitle(title) ??
         (kProjectTypes.contains(projectType) ? null : 'Please select a project type') ??
-        (rolesNeeded.isEmpty ? 'Pick at least one role you need' : null);
+        (rolesNeeded.isEmpty && requiredSkills.isEmpty
+            ? 'Pick at least one role or skill you need'
+            : null);
     if (v != null) return v;
     if (_profile.me == null) return 'Please complete your profile first.';
-    if (team != null) return 'You are already in a team. Leave it first.';
-    return _mutate(() => _repo.createTeam(title.trim(), projectType, rolesNeeded.toSet().toList()));
+    busy = true;
+    emit();
+    try {
+      final created = await _repo.createTeam(
+        title.trim(),
+        projectType,
+        rolesNeeded.toSet().toList(),
+        description: description.trim(),
+        requiredSkills: requiredSkills.toSet().toList(),
+        domainTags: domainTags.toSet().toList(),
+      );
+      await refresh();
+      selectActiveTeam(created.id);
+      return null;
+    } catch (e) {
+      return friendlyError(e).message;
+    } finally {
+      busy = false;
+      emit();
+    }
   }
 
-  /// Leave my team (if I am the owner the team is disbanded).
-  Future<String?> leave() async {
-    final t = team;
-    if (t == null) return 'You are not in a team.';
-    return _mutate(() => _repo.leaveTeam(t.id));
+  /// Leave the active team (or the team specified by [teamId]).
+  /// If I am the owner, that project/team is disbanded.
+  Future<String?> leave([String? teamId]) async {
+    final targetId = teamId ?? team?.id;
+    if (targetId == null) return 'You are not in a team.';
+    return _mutate(() => _repo.leaveTeam(targetId));
   }
 
   Future<String?> _mutate(Future<void> Function() op) async {
@@ -110,6 +180,8 @@ class TeamController extends BaseController {
   void reset() {
     _uid = null;
     team = null;
+    myTeams = [];
+    openTeams = [];
     state = LoadState.loading;
     offline = false;
     error = null;

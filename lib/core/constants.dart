@@ -2,6 +2,16 @@
 /// engine. Keep these in sync with `supabase/schema.sql` (role_skills()).
 library;
 
+const List<String> kUniversities = [
+  'COMSATS Wah',
+  'COMSATS Islamabad',
+  'NUST',
+  'FAST-NUCES',
+  'UET Taxila',
+  'AIR University',
+  'GIKI',
+];
+
 const List<String> kDepartments = [
   'Computer Science',
   'Software Engineering',
@@ -95,5 +105,8 @@ const Map<String, List<String>> kRoleSkills = {
 
 /// Validation limits.
 const int kMaxBioLength = 300;
+const int kMaxExperienceLength = 400;
+const int kMaxProjectDescription = 500;
 const int kMaxRequestMessage = 200;
 const int kMaxTeamTitle = 60;
+

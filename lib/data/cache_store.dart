@@ -50,4 +50,6 @@ class CacheKeys {
   static const profiles = 'profiles';
   static const requests = 'requests';
   static const team = 'team';
+  static const myTeams = 'my_teams';
+  static const openTeams = 'open_teams';
 }

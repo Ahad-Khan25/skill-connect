@@ -6,31 +6,41 @@ create extension if not exists pgcrypto;
 
 -- ---------------------------------------------------------------- tables
 create table if not exists public.profiles (
-  id            uuid primary key default gen_random_uuid(),
-  user_id       uuid unique references auth.users(id) on delete cascade,
-  email         text,
-  name          text not null check (char_length(trim(name)) between 1 and 50),
-  department    text not null,
-  semester      int  not null check (semester between 1 and 8),
-  skills        text[] not null default '{}',
-  interests     text[] not null default '{}',
-  skills_needed text[] not null default '{}',
-  project_type  text not null default 'FYP',
-  availability  text[] not null default '{}',
-  bio           text not null default '' check (char_length(bio) <= 300),
-  avatar_url    text,
-  is_sample     boolean not null default false,
-  created_at    timestamptz not null default now()
+  id              uuid primary key default gen_random_uuid(),
+  user_id         uuid unique references auth.users(id) on delete cascade,
+  email           text,
+  name            text not null check (char_length(trim(name)) between 1 and 50),
+  university      text not null default 'COMSATS Wah',
+  department      text not null,
+  semester        int  not null check (semester between 1 and 8),
+  skills          text[] not null default '{}',
+  interests       text[] not null default '{}',
+  skills_needed   text[] not null default '{}',
+  project_type    text not null default 'FYP',
+  availability    text[] not null default '{}',
+  bio             text not null default '' check (char_length(bio) <= 300),
+  work_experience text not null default '' check (char_length(work_experience) <= 400),
+  avatar_url      text,
+  is_sample       boolean not null default false,
+  created_at      timestamptz not null default now()
 );
+alter table public.profiles add column if not exists university text not null default 'COMSATS Wah';
+alter table public.profiles add column if not exists work_experience text not null default '';
 
 create table if not exists public.teams (
-  id            uuid primary key default gen_random_uuid(),
-  owner_profile uuid not null references public.profiles(id) on delete cascade,
-  title         text not null check (char_length(trim(title)) between 1 and 60),
-  project_type  text not null default 'FYP',
-  roles_needed  text[] not null default '{}',
-  created_at    timestamptz not null default now()
+  id              uuid primary key default gen_random_uuid(),
+  owner_profile   uuid not null references public.profiles(id) on delete cascade,
+  title           text not null check (char_length(trim(title)) between 1 and 60),
+  description     text not null default '' check (char_length(description) <= 500),
+  project_type    text not null default 'FYP',
+  roles_needed    text[] not null default '{}',
+  required_skills text[] not null default '{}',
+  domain_tags     text[] not null default '{}',
+  created_at      timestamptz not null default now()
 );
+alter table public.teams add column if not exists description text not null default '';
+alter table public.teams add column if not exists required_skills text[] not null default '{}';
+alter table public.teams add column if not exists domain_tags text[] not null default '{}';
 
 create table if not exists public.requests (
   id           uuid primary key default gen_random_uuid(),
@@ -125,12 +135,10 @@ create policy requests_select on public.requests for select to authenticated
   using (from_profile = public.my_profile_id() or to_profile = public.my_profile_id());
 
 drop policy if exists teams_select on public.teams;
-create policy teams_select on public.teams for select to authenticated
-  using (owner_profile = public.my_profile_id() or public.is_team_member(id));
+create policy teams_select on public.teams for select to authenticated using (true);
 
 drop policy if exists team_members_select on public.team_members;
-create policy team_members_select on public.team_members for select to authenticated
-  using (public.is_team_member(team_id));
+create policy team_members_select on public.team_members for select to authenticated using (true);
 -- No insert/update/delete policies on requests/teams/team_members:
 -- all writes go through the SECURITY DEFINER RPCs below.
 
@@ -150,13 +158,12 @@ begin
                or (from_profile = p_to_profile and to_profile = me))) then
     raise exception 'There is already a pending request with this student.';
   end if;
-  if p_team_id is not null and not exists (
-      select 1 from teams t where t.id = p_team_id
-        and (t.owner_profile = me or exists (select 1 from team_members m where m.team_id = t.id and m.profile_id = me))) then
-    raise exception 'You can only invite people to your own team.';
+  if p_team_id is not null and not exists (select 1 from teams t where t.id = p_team_id) then
+    raise exception 'Target team not found.';
   end if;
-  if p_team_id is not null and exists (select 1 from team_members where team_id = p_team_id and profile_id = p_to_profile) then
-    raise exception 'This student is already in your team.';
+  if p_team_id is not null and exists (select 1 from team_members where team_id = p_team_id and profile_id = p_to_profile)
+     and exists (select 1 from team_members where team_id = p_team_id and profile_id = me) then
+    raise exception 'Both students are already in this team.';
   end if;
   insert into requests (from_profile, to_profile, message, team_id)
   values (me, p_to_profile, msg, p_team_id) returning id into new_id;
@@ -244,9 +251,35 @@ begin
   if t = '' then raise exception 'Please enter a team title.'; end if;
   if char_length(t) > 60 then raise exception 'Title is too long (max 60 characters).'; end if;
   if p_project_type not in ('Semester Project','FYP') then raise exception 'Please select a project type.'; end if;
-  if public.my_team_id() is not null then raise exception 'You are already in a team. Leave it first.'; end if;
   insert into teams (owner_profile, title, project_type, roles_needed)
   values (me, t, p_project_type, coalesce((select array_agg(distinct x) from unnest(p_roles) x), '{}'))
+  returning id into new_id;
+  insert into team_members (team_id, profile_id, role) values (new_id, me, 'Owner');
+  return new_id;
+end $$;
+
+create or replace function public.create_project(
+  p_title text,
+  p_description text,
+  p_project_type text,
+  p_roles text[],
+  p_skills text[] default '{}',
+  p_domains text[] default '{}'
+)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare me uuid := public.my_profile_id(); t text := trim(coalesce(p_title, '')); new_id uuid;
+begin
+  if me is null then raise exception 'Please complete your profile first.'; end if;
+  if t = '' then raise exception 'Please enter a project title.'; end if;
+  if char_length(t) > 60 then raise exception 'Title is too long (max 60 characters).'; end if;
+  if p_project_type not in ('Semester Project','FYP') then raise exception 'Please select a project type.'; end if;
+  insert into teams (owner_profile, title, description, project_type, roles_needed, required_skills, domain_tags)
+  values (
+    me, t, left(trim(coalesce(p_description, '')), 500), p_project_type,
+    coalesce((select array_agg(distinct x) from unnest(p_roles) x), '{}'),
+    coalesce((select array_agg(distinct x) from unnest(p_skills) x), '{}'),
+    coalesce((select array_agg(distinct x) from unnest(p_domains) x), '{}')
+  )
   returning id into new_id;
   insert into team_members (team_id, profile_id, role) values (new_id, me, 'Owner');
   return new_id;
@@ -273,7 +306,7 @@ begin
   return 'left';
 end $$;
 
--- My team as JSON in the exact shape of Team.fromJson (or null).
+-- My primary team as JSON in the exact shape of Team.fromJson (or null).
 create or replace function public.get_my_team()
 returns jsonb language plpgsql stable security definer set search_path = public as $$
 declare me uuid := public.my_profile_id(); tid uuid := public.my_team_id(); t teams%rowtype;
@@ -281,8 +314,11 @@ begin
   if tid is null then return null; end if;
   select * into t from teams where id = tid;
   return jsonb_build_object(
-    'id', t.id, 'title', t.title, 'project_type', t.project_type,
+    'id', t.id, 'title', t.title, 'description', coalesce(t.description, ''),
+    'project_type', t.project_type,
     'open_roles', to_jsonb(t.roles_needed),
+    'required_skills', to_jsonb(coalesce(t.required_skills, '{}')),
+    'domain_tags', to_jsonb(coalesce(t.domain_tags, '{}')),
     'i_am_owner', t.owner_profile = me,
     'members', coalesce((
       select jsonb_agg(jsonb_build_object(
@@ -292,10 +328,64 @@ begin
       where m.team_id = t.id), '[]'::jsonb));
 end $$;
 
+-- All teams/projects I own or belong to.
+create or replace function public.get_my_teams()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare me uuid := public.my_profile_id();
+begin
+  if me is null then return '[]'::jsonb; end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id', t.id, 'title', t.title, 'description', coalesce(t.description, ''),
+      'project_type', t.project_type,
+      'open_roles', to_jsonb(t.roles_needed),
+      'required_skills', to_jsonb(coalesce(t.required_skills, '{}')),
+      'domain_tags', to_jsonb(coalesce(t.domain_tags, '{}')),
+      'i_am_owner', t.owner_profile = me,
+      'members', coalesce((
+        select jsonb_agg(jsonb_build_object(
+                 'role', m.role, 'is_owner', m.profile_id = t.owner_profile, 'profile', to_jsonb(p))
+               order by (m.profile_id = t.owner_profile) desc, m.joined_at)
+        from team_members m join profiles p on p.id = m.profile_id
+        where m.team_id = t.id), '[]'::jsonb))
+      order by t.created_at desc)
+    from teams t
+    where t.owner_profile = me
+       or exists (select 1 from team_members m where m.team_id = t.id and m.profile_id = me)
+  ), '[]'::jsonb);
+end $$;
+
+-- Public open teams posted by other students that are looking for teammates.
+create or replace function public.get_open_teams()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare me uuid := public.my_profile_id();
+begin
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id', t.id, 'title', t.title, 'description', coalesce(t.description, ''),
+      'project_type', t.project_type,
+      'open_roles', to_jsonb(t.roles_needed),
+      'required_skills', to_jsonb(coalesce(t.required_skills, '{}')),
+      'domain_tags', to_jsonb(coalesce(t.domain_tags, '{}')),
+      'i_am_owner', false,
+      'members', coalesce((
+        select jsonb_agg(jsonb_build_object(
+                 'role', m.role, 'is_owner', m.profile_id = t.owner_profile, 'profile', to_jsonb(p))
+               order by (m.profile_id = t.owner_profile) desc, m.joined_at)
+        from team_members m join profiles p on p.id = m.profile_id
+        where m.team_id = t.id), '[]'::jsonb))
+      order by t.created_at desc)
+    from teams t
+    where (me is null or (t.owner_profile <> me and not exists (select 1 from team_members m where m.team_id = t.id and m.profile_id = me)))
+      and (cardinality(t.roles_needed) > 0 or cardinality(t.required_skills) > 0)
+  ), '[]'::jsonb);
+end $$;
+
 grant execute on function public.send_request(uuid, text, uuid), public.accept_request(uuid),
   public.reject_request(uuid), public.cancel_request(uuid), public.create_team(text, text, text[]),
-  public.leave_team(uuid), public.get_my_team(), public.my_profile_id(), public.my_team_id(),
-  public.is_team_member(uuid) to authenticated;
+  public.create_project(text, text, text, text[], text[], text[]),
+  public.leave_team(uuid), public.get_my_team(), public.get_my_teams(), public.get_open_teams(),
+  public.my_profile_id(), public.my_team_id(), public.is_team_member(uuid) to authenticated;
 
 -- ---------------------------------------------------------------- trigger
 -- Every new real account receives 3 pending requests from sample students

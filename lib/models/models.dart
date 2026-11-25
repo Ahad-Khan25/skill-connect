@@ -15,9 +15,11 @@ class Profile {
   String id;
   String? userId;
   String name;
+  String university;
   String department;
   String projectType;
   String bio;
+  String workExperience;
   int semester;
   List<String> skills;
   List<String> interests;
@@ -31,10 +33,12 @@ class Profile {
     this.id = '',
     this.userId,
     required this.name,
+    this.university = 'COMSATS Wah',
     required this.department,
     required this.semester,
     this.projectType = 'FYP',
     this.bio = '',
+    this.workExperience = '',
     List<String>? skills,
     List<String>? interests,
     List<String>? skillsNeeded,
@@ -59,9 +63,11 @@ class Profile {
     String? id,
     String? userId,
     String? name,
+    String? university,
     String? department,
     String? projectType,
     String? bio,
+    String? workExperience,
     int? semester,
     List<String>? skills,
     List<String>? interests,
@@ -75,9 +81,11 @@ class Profile {
         id: id ?? this.id,
         userId: userId ?? this.userId,
         name: name ?? this.name,
+        university: university ?? this.university,
         department: department ?? this.department,
         projectType: projectType ?? this.projectType,
         bio: bio ?? this.bio,
+        workExperience: workExperience ?? this.workExperience,
         semester: semester ?? this.semester,
         skills: List.of(skills ?? this.skills),
         interests: List.of(interests ?? this.interests),
@@ -95,10 +103,12 @@ class Profile {
       id: (j['id'] ?? '').toString(),
       userId: uid,
       name: (j['name'] ?? '').toString(),
+      university: (j['university'] ?? 'COMSATS Wah').toString(),
       department: (j['department'] ?? '').toString(),
       semester: (j['semester'] as num?)?.toInt() ?? 0,
       projectType: (j['project_type'] ?? 'FYP').toString(),
       bio: (j['bio'] ?? '').toString(),
+      workExperience: (j['work_experience'] ?? '').toString(),
       skills: _strList(j['skills']),
       interests: _strList(j['interests']),
       skillsNeeded: _strList(j['skills_needed']),
@@ -114,10 +124,12 @@ class Profile {
         'id': id,
         'user_id': userId,
         'name': name,
+        'university': university,
         'department': department,
         'semester': semester,
         'project_type': projectType,
         'bio': bio,
+        'work_experience': workExperience,
         'skills': skills,
         'interests': interests,
         'skills_needed': skillsNeeded,
@@ -130,10 +142,12 @@ class Profile {
   /// Columns written to Supabase on save.
   Map<String, dynamic> toDbRow() => {
         'name': name.trim(),
+        'university': university,
         'department': department,
         'semester': semester,
         'project_type': projectType,
         'bio': bio.trim(),
+        'work_experience': workExperience.trim(),
         'skills': skills,
         'interests': interests,
         'skills_needed': skillsNeeded,
@@ -153,6 +167,7 @@ class TeamRequest {
   /// True when I am the sender.
   bool isSent;
   String? teamId;
+  String? teamTitle;
 
   TeamRequest({
     required this.id,
@@ -163,6 +178,7 @@ class TeamRequest {
     required this.createdAt,
     required this.isSent,
     this.teamId,
+    this.teamTitle,
   });
 
   /// The other person (receiver for sent requests, sender for received).
@@ -180,6 +196,7 @@ class TeamRequest {
       createdAt: DateTime.tryParse((j['created_at'] ?? '').toString())?.toLocal() ?? DateTime.now(),
       isSent: myProfileId != null ? from.id == myProfileId : j['is_sent'] == true,
       teamId: j['team_id'] as String?,
+      teamTitle: j['team_title'] as String?,
     );
   }
 
@@ -192,6 +209,7 @@ class TeamRequest {
         'created_at': createdAt.toUtc().toIso8601String(),
         'is_sent': isSent,
         'team_id': teamId,
+        'team_title': teamTitle,
       };
 }
 
@@ -218,27 +236,39 @@ class TeamMember {
 class Team {
   String id;
   String title;
+  String description;
   String projectType;
   List<String> openRoles;
+  List<String> requiredSkills;
+  List<String> domainTags;
   List<TeamMember> members;
   bool iAmOwner;
 
   Team({
     required this.id,
     required this.title,
+    this.description = '',
     required this.projectType,
     required this.openRoles,
+    List<String>? requiredSkills,
+    List<String>? domainTags,
     required this.members,
     required this.iAmOwner,
-  });
+  })  : requiredSkills = requiredSkills ?? [],
+        domainTags = domainTags ?? [];
 
   TeamMember? get owner => members.where((m) => m.isOwner).firstOrNull;
+
+  bool hasMember(String profileId) => members.any((m) => m.profile.id == profileId);
 
   factory Team.fromJson(Map<String, dynamic> j) => Team(
         id: j['id'].toString(),
         title: (j['title'] ?? '').toString(),
+        description: (j['description'] ?? '').toString(),
         projectType: (j['project_type'] ?? '').toString(),
         openRoles: _strList(j['open_roles']),
+        requiredSkills: _strList(j['required_skills']),
+        domainTags: _strList(j['domain_tags']),
         members: (j['members'] as List? ?? [])
             .map((m) => TeamMember.fromJson(Map<String, dynamic>.from(m as Map)))
             .toList(),
@@ -248,8 +278,11 @@ class Team {
   Map<String, dynamic> toJson() => {
         'id': id,
         'title': title,
+        'description': description,
         'project_type': projectType,
         'open_roles': openRoles,
+        'required_skills': requiredSkills,
+        'domain_tags': domainTags,
         'members': members.map((m) => m.toJson()).toList(),
         'i_am_owner': iAmOwner,
       };
@@ -277,30 +310,45 @@ class MatchResult {
 
 /// Filters for the Discover screen. Null = "any".
 class DiscoverFilters {
+  final String? university;
   final String? department;
   final int? semester;
   final String? skill;
   final String? projectType;
 
-  const DiscoverFilters({this.department, this.semester, this.skill, this.projectType});
+  const DiscoverFilters({
+    this.university,
+    this.department,
+    this.semester,
+    this.skill,
+    this.projectType,
+  });
 
-  bool get isActive => department != null || semester != null || skill != null || projectType != null;
+  bool get isActive =>
+      university != null ||
+      department != null ||
+      semester != null ||
+      skill != null ||
+      projectType != null;
 
   int get activeCount =>
-      [department, semester, skill, projectType].where((e) => e != null).length;
+      [university, department, semester, skill, projectType].where((e) => e != null).length;
 
   /// Use [clearX] flags to set a field back to null.
   DiscoverFilters copyWith({
+    String? university,
     String? department,
     int? semester,
     String? skill,
     String? projectType,
+    bool clearUniversity = false,
     bool clearDepartment = false,
     bool clearSemester = false,
     bool clearSkill = false,
     bool clearProjectType = false,
   }) =>
       DiscoverFilters(
+        university: clearUniversity ? null : (university ?? this.university),
         department: clearDepartment ? null : (department ?? this.department),
         semester: clearSemester ? null : (semester ?? this.semester),
         skill: clearSkill ? null : (skill ?? this.skill),
