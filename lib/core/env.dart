@@ -11,9 +11,10 @@ const String kSupabaseUrl = String.fromEnvironment(
   defaultValue: 'https://lrlwzgolzckcaiahjhoh.supabase.co',
 );
 
+/// Publishable (client-side) key – safe to ship; data is protected by RLS.
 const String kSupabaseAnonKey = String.fromEnvironment(
   'SUPABASE_ANON_KEY',
-  defaultValue: '',
+  defaultValue: 'sb_publishable_UXu7MatcMbopR4KEBrWdPg_lgccv1jF',
 );
 
 /// Force fake mode even if a key is present: --dart-define=FAKE_BACKEND=true
