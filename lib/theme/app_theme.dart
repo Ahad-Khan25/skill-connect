@@ -287,11 +287,17 @@ class AppTheme {
         ),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: p.isDark ? p.neutralTint : Colors.white.withValues(alpha: 0.75),
-        selectedColor: p.primary,
+        backgroundColor: p.isDark ? p.neutralTint : Colors.white.withValues(alpha: 0.78),
+        selectedColor: AppTokens.jetBlack,
+        checkmarkColor: Colors.white,
         side: BorderSide(color: p.border),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(999),
+        ),
+        secondaryLabelStyle: const TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
         ),
         labelStyle: TextStyle(
           color: p.onSurface,
@@ -371,51 +377,324 @@ class AppTheme {
   }
 }
 
-/// TeamUp logo with jet-black & lavender overlapping circles.
+/// SkillConnect 5-Node Glowing Constellation Logo (exact reproduction of uploaded Image 1).
+/// - 5 connected nodes: 2 glowing gold/amber nodes on top/right + 3 indigo/violet nodes on left/bottom
+/// - All 10 interconnecting edges with a violet-to-gold gradient
 class TeamUpLogo extends StatelessWidget {
   final double size;
   const TeamUpLogo({super.key, this.size = 64});
 
   @override
   Widget build(BuildContext context) {
-    final radius = size * 0.34;
-    return Container(
+    return SizedBox(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        color: AppTokens.jetBlack,
-        borderRadius: BorderRadius.circular(radius),
-        boxShadow: [
-          BoxShadow(
-            color: AppTokens.jetBlack.withValues(alpha: 0.18),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
       child: const CustomPaint(
-        painter: _LogoPainter(),
+        painter: _SkillConnectConstellationPainter(),
       ),
     );
   }
 }
 
-class _LogoPainter extends CustomPainter {
-  const _LogoPainter();
+/// Exact "SkillConnect" two-tone wordmark ("Skill" in white/dark, "Connect" in #635BFF)
+/// + optional "Bridging talents, building futures." tagline.
+class SkillConnectWordmark extends StatelessWidget {
+  final double fontSize;
+  final bool showTagline;
+  final bool forceDarkCanvas;
+  const SkillConnectWordmark({
+    super.key,
+    this.fontSize = 30,
+    this.showTagline = true,
+    this.forceDarkCanvas = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
+    final skillColor = forceDarkCanvas ? Colors.white : p.onSurface;
+    final subColor = forceDarkCanvas ? const Color(0xFF9E9BB0) : p.onSurfaceSecondary;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        RichText(
+          text: TextSpan(
+            style: TextStyle(
+              fontSize: fontSize,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.6,
+              height: 1.15,
+            ),
+            children: [
+              TextSpan(text: 'Skill', style: TextStyle(color: skillColor)),
+              const TextSpan(text: 'Connect', style: TextStyle(color: Color(0xFF635BFF))),
+            ],
+          ),
+        ),
+        if (showTagline) ...[
+          const SizedBox(height: 6),
+          Text(
+            'Bridging talents, building futures.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: fontSize * 0.42,
+              fontWeight: FontWeight.w400,
+              color: subColor,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _SkillConnectConstellationPainter extends CustomPainter {
+  const _SkillConnectConstellationPainter();
 
   @override
   void paint(Canvas canvas, Size size) {
-    final scale = size.width / 44.0;
-    final r = 10.0 * scale;
-    final leftPaint = Paint()..color = AppTokens.pastelLavender;
-    final rightPaint = Paint()..color = AppTokens.pastelRose;
+    final w = size.width;
+    final h = size.height;
 
-    canvas.drawCircle(Offset(17.0 * scale, 22.0 * scale), r, leftPaint);
-    canvas.drawCircle(Offset(27.0 * scale, 22.0 * scale), r, rightPaint);
+    // 5 node positions matching the uploaded SkillConnect constellation icon:
+    // 0: Top-Left (indigo-violet)
+    // 1: Top-Center-Right (gold glowing)
+    // 2: Far-Right (gold glowing)
+    // 3: Bottom-Center (deep purple)
+    // 4: Bottom-Left (deep purple)
+    final nodes = <Offset>[
+      Offset(w * 0.20, h * 0.30),
+      Offset(w * 0.56, h * 0.14),
+      Offset(w * 0.84, h * 0.50),
+      Offset(w * 0.56, h * 0.86),
+      Offset(w * 0.20, h * 0.72),
+    ];
+
+    const purple = Color(0xFF5D52F2);
+    const deepPurple = Color(0xFF473EB8);
+    const gold = Color(0xFFF7BE32);
+
+    final nodeColors = <Color>[purple, gold, gold, deepPurple, deepPurple];
+    final isGold = <bool>[false, true, true, false, false];
+
+    // Draw all 10 interconnecting edges (complete K5 graph) with gradient lines
+    final strokeW = (w * 0.055).clamp(1.6, 5.5);
+    for (var i = 0; i < nodes.length; i++) {
+      for (var j = i + 1; j < nodes.length; j++) {
+        final p1 = nodes[i];
+        final p2 = nodes[j];
+        final edgePaint = Paint()
+          ..strokeWidth = strokeW
+          ..strokeCap = StrokeCap.round
+          ..shader = LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [nodeColors[i], nodeColors[j]],
+          ).createShader(Rect.fromPoints(p1, p2));
+        canvas.drawLine(p1, p2, edgePaint);
+      }
+    }
+
+    // Draw soft ambient glow behind the 2 gold nodes & 3 purple nodes
+    final nodeRadius = (w * 0.105).clamp(3.0, 14.0);
+    for (var i = 0; i < nodes.length; i++) {
+      final center = nodes[i];
+      final glowColor = isGold[i] ? gold : purple;
+      final glowPaint = Paint()
+        ..color = glowColor.withValues(alpha: isGold[i] ? 0.38 : 0.22)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, nodeRadius * 1.1);
+      canvas.drawCircle(center, nodeRadius * 1.45, glowPaint);
+
+      final fillPaint = Paint()
+        ..shader = RadialGradient(
+          colors: isGold[i]
+              ? const [Color(0xFFFFDF70), Color(0xFFF4B41A)]
+              : const [Color(0xFF7B72FF), Color(0xFF493EC4)],
+        ).createShader(Rect.fromCircle(center: center, radius: nodeRadius));
+      canvas.drawCircle(center, nodeRadius, fillPaint);
+    }
   }
 
   @override
-  bool shouldRepaint(covariant _LogoPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _SkillConnectConstellationPainter oldDelegate) => false;
+}
+
+/// Collaborative Team Illustration from Image 2 (isometric glowing ring of students
+/// with laptops, code screens, chat bubbles & puzzle pieces).
+class SkillConnectHeroIllustration extends StatelessWidget {
+  final double height;
+  const SkillConnectHeroIllustration({super.key, this.height = 190});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: height,
+      width: height * 1.25,
+      child: CustomPaint(
+        painter: _HeroCollaborationPainter(),
+      ),
+    );
+  }
+}
+
+class _HeroCollaborationPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2 + 6;
+    final rx = size.width * 0.40;
+    final ry = size.height * 0.28;
+
+    // 1. Glowing isometric collaboration orbit rings
+    final orbitRect = Rect.fromCenter(center: Offset(cx, cy + 10), width: rx * 2.1, height: ry * 1.9);
+    final glowOrbit = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..color = const Color(0xFF635BFF).withValues(alpha: 0.35)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+    canvas.drawOval(orbitRect, glowOrbit);
+
+    final mainOrbit = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..color = const Color(0xFF8C84FF).withValues(alpha: 0.55);
+    canvas.drawOval(orbitRect, mainOrbit);
+
+    // Golden accent arc at bottom
+    final goldArc = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..color = const Color(0xFFF7BE32).withValues(alpha: 0.75);
+    canvas.drawArc(orbitRect, 0.3, 1.8, false, goldArc);
+
+    // 2. Floating code window on top-left & dashboard window on top-right
+    _drawFloatingScreen(
+      canvas,
+      Offset(cx - rx * 0.85, cy - ry * 0.95),
+      const Size(46, 34),
+      const Color(0xFF4F46E5),
+      const Color(0xFFA5B4FC),
+    );
+    _drawFloatingScreen(
+      canvas,
+      Offset(cx + rx * 0.55, cy - ry * 0.95),
+      const Size(48, 34),
+      const Color(0xFF3B82F6),
+      const Color(0xFF86EFAC),
+    );
+
+    // 3. Floating chat bubbles (mint green & gold)
+    _drawChatBubble(canvas, Offset(cx - 24, cy - ry * 1.25), const Color(0xFF6EE7B7));
+    _drawChatBubble(canvas, Offset(cx + 22, cy - ry * 1.05), const Color(0xFFFBBF24));
+
+    // 4. Five team members collaborating around the ring
+    _drawTeammateNode(canvas, Offset(cx - rx * 0.55, cy - ry * 0.35), const Color(0xFF7C69FF), hasLaptop: false);
+    _drawTeammateNode(canvas, Offset(cx + rx * 0.58, cy - ry * 0.32), const Color(0xFFF59E0B), hasLaptop: false);
+    _drawTeammateNode(canvas, Offset(cx + 4, cy + 2), const Color(0xFFA78BFA), hasLaptop: false);
+    _drawTeammateNode(canvas, Offset(cx - rx * 0.52, cy + ry * 0.55), const Color(0xFF635BFF), hasLaptop: true);
+    _drawTeammateNode(canvas, Offset(cx + rx * 0.50, cy + ry * 0.55), const Color(0xFF34D399), hasLaptop: true);
+
+    // 5. Golden puzzle pieces at bottom center
+    final puzzlePaint1 = Paint()..color = const Color(0xFFF7BE32);
+    final puzzlePaint2 = Paint()..color = const Color(0xFF635BFF);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(cx + 10, cy + ry * 0.95), width: 16, height: 11),
+        const Radius.circular(3),
+      ),
+      puzzlePaint1,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(cx - 8, cy + ry * 1.02), width: 16, height: 11),
+        const Radius.circular(3),
+      ),
+      puzzlePaint2,
+    );
+  }
+
+  void _drawFloatingScreen(Canvas canvas, Offset topLeft, Size s, Color bg, Color line) {
+    final rect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(topLeft.dx, topLeft.dy, s.width, s.height),
+      const Radius.circular(6),
+    );
+    canvas.drawRRect(rect, Paint()..color = bg.withValues(alpha: 0.85));
+    canvas.drawRRect(
+      rect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2
+        ..color = Colors.white.withValues(alpha: 0.35),
+    );
+    final lp = Paint()
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round
+      ..color = line;
+    canvas.drawLine(Offset(topLeft.dx + 8, topLeft.dy + 10), Offset(topLeft.dx + s.width - 12, topLeft.dy + 10), lp);
+    canvas.drawLine(Offset(topLeft.dx + 8, topLeft.dy + 17), Offset(topLeft.dx + s.width - 18, topLeft.dy + 17), lp);
+    canvas.drawLine(Offset(topLeft.dx + 8, topLeft.dy + 24), Offset(topLeft.dx + s.width - 8, topLeft.dy + 24), lp);
+  }
+
+  void _drawChatBubble(Canvas canvas, Offset center, Color color) {
+    final r = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: center, width: 26, height: 16),
+      const Radius.circular(5),
+    );
+    canvas.drawRRect(r, Paint()..color = color);
+    final lineP = Paint()
+      ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round
+      ..color = const Color(0xFF16151A).withValues(alpha: 0.65);
+    canvas.drawLine(Offset(center.dx - 7, center.dy - 2), Offset(center.dx + 7, center.dy - 2), lineP);
+    canvas.drawLine(Offset(center.dx - 7, center.dy + 3), Offset(center.dx + 3, center.dy + 3), lineP);
+  }
+
+  void _drawTeammateNode(Canvas canvas, Offset pos, Color shirtColor, {required bool hasLaptop}) {
+    // Glowing platform disc
+    canvas.drawOval(
+      Rect.fromCenter(center: Offset(pos.dx, pos.dy + 16), width: 34, height: 12),
+      Paint()..color = shirtColor.withValues(alpha: 0.30),
+    );
+    // Torso
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(pos.dx, pos.dy + 5), width: 20, height: 18),
+        const Radius.circular(7),
+      ),
+      Paint()..color = shirtColor,
+    );
+    // Head
+    canvas.drawCircle(
+      Offset(pos.dx, pos.dy - 9),
+      6.5,
+      Paint()..color = const Color(0xFFFDE2C8),
+    );
+    // Hair
+    canvas.drawArc(
+      Rect.fromCircle(center: Offset(pos.dx, pos.dy - 10), radius: 6.8),
+      3.14,
+      3.14,
+      true,
+      Paint()..color = const Color(0xFF1E1B2E),
+    );
+    if (hasLaptop) {
+      final lapRect = RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(pos.dx + (pos.dx < 100 ? 13 : -13), pos.dy + 2), width: 18, height: 13),
+        const Radius.circular(3),
+      );
+      canvas.drawRRect(lapRect, Paint()..color = Colors.white);
+      canvas.drawRRect(
+        lapRect,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.2
+          ..color = const Color(0xFF635BFF),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _HeroCollaborationPainter oldDelegate) => false;
 }
 
 /// Soft pastel gradient avatar matching the circular portraits in the inspiration image.

@@ -28,34 +28,36 @@ void main() {
     ..writeln();
 
   final teams = buildSampleOpenTeams();
-  b
-    ..writeln('insert into public.teams')
-    ..writeln('  (id, owner_profile, title, description, project_type, roles_needed, required_skills, domain_tags)')
-    ..writeln('values');
-  final teamRows = teams.map((t) {
-    final ownerId = t.owner?.profile.id ?? t.members.first.profile.id;
-    return '  (${q(t.id)}, ${q(ownerId)}, ${q(t.title)}, ${q(t.description)}, ${q(t.projectType)}, '
-        '${arr(t.openRoles)}, ${arr(t.requiredSkills)}, ${arr(t.domainTags)})';
-  });
-  b
-    ..writeln(teamRows.join(',\n'))
-    ..writeln('on conflict (id) do update set')
-    ..writeln('  title = excluded.title, description = excluded.description, project_type = excluded.project_type,')
-    ..writeln('  roles_needed = excluded.roles_needed, required_skills = excluded.required_skills, domain_tags = excluded.domain_tags;')
-    ..writeln();
+  if (teams.isNotEmpty) {
+    b
+      ..writeln('insert into public.teams')
+      ..writeln('  (id, owner_profile, title, description, project_type, roles_needed, required_skills, domain_tags)')
+      ..writeln('values');
+    final teamRows = teams.map((t) {
+      final ownerId = t.owner?.profile.id ?? t.members.first.profile.id;
+      return '  (${q(t.id)}, ${q(ownerId)}, ${q(t.title)}, ${q(t.description)}, ${q(t.projectType)}, '
+          '${arr(t.openRoles)}, ${arr(t.requiredSkills)}, ${arr(t.domainTags)})';
+    });
+    b
+      ..writeln(teamRows.join(',\n'))
+      ..writeln('on conflict (id) do update set')
+      ..writeln('  title = excluded.title, description = excluded.description, project_type = excluded.project_type,')
+      ..writeln('  roles_needed = excluded.roles_needed, required_skills = excluded.required_skills, domain_tags = excluded.domain_tags;')
+      ..writeln();
 
-  b
-    ..writeln('insert into public.team_members (team_id, profile_id, role)')
-    ..writeln('values');
-  final memberRows = <String>[];
-  for (final t in teams) {
-    for (final m in t.members) {
-      memberRows.add('  (${q(t.id)}, ${q(m.profile.id)}, ${q(m.role)})');
+    b
+      ..writeln('insert into public.team_members (team_id, profile_id, role)')
+      ..writeln('values');
+    final memberRows = <String>[];
+    for (final t in teams) {
+      for (final m in t.members) {
+        memberRows.add('  (${q(t.id)}, ${q(m.profile.id)}, ${q(m.role)})');
+      }
     }
+    b
+      ..writeln(memberRows.join(',\n'))
+      ..writeln('on conflict (team_id, profile_id) do update set role = excluded.role;');
   }
-  b
-    ..writeln(memberRows.join(',\n'))
-    ..writeln('on conflict (team_id, profile_id) do update set role = excluded.role;');
 
   File('supabase/seed.sql').writeAsStringSync(b.toString());
   stdout.writeln('Wrote supabase/seed.sql (${kSampleProfiles.length} profiles, ${teams.length} open teams)');

@@ -130,72 +130,101 @@ class _ResponsiveContainer extends StatelessWidget {
 }
 
 // ============================================================================
-// 0. STITCH SPLASH SCREEN (Direct port of teammate's `code.html`)
+// 0. SKILLCONNECT SPLASH SCREEN (Matches uploaded Image 1)
 // ============================================================================
 class _StitchSplashScreen extends StatelessWidget {
   const _StitchSplashScreen();
 
   @override
   Widget build(BuildContext context) {
-    final p = AppPalette.of(context);
     return Scaffold(
-      body: _StitchGradientBackground(
-        child: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 360),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppTokens.pagePad,
-                  vertical: AppTokens.xxl,
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const SizedBox(height: 32),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const TeamUpLogo(size: 84),
-                        const SizedBox(height: AppTokens.lg),
-                        Text(
-                          'TeamUp',
-                          style: TextStyle(
-                            fontSize: 34,
-                            height: 40 / 34,
-                            letterSpacing: -0.6,
-                            fontWeight: FontWeight.w800,
-                            color: p.onSurface,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Find the right teammates.',
-                          style: TextStyle(
-                            fontSize: 14.5,
-                            color: p.onSurfaceSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: AppTokens.lg),
-                      child: SizedBox(
-                        width: 28,
-                        height: 28,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          backgroundColor: p.primaryTint,
-                          valueColor: AlwaysStoppedAnimation<Color>(p.primary),
-                        ),
-                      ),
-                    ),
-                  ],
+      backgroundColor: const Color(0xFF0E0C1D),
+      body: Stack(
+        children: [
+          // Top-right purple nebula glow
+          Positioned(
+            top: -80,
+            right: -60,
+            child: IgnorePointer(
+              child: Container(
+                width: 280,
+                height: 280,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFF635BFF).withValues(alpha: 0.35),
+                      Colors.transparent,
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
+          // Bottom-left blue/purple nebula glow
+          Positioned(
+            bottom: -90,
+            left: -70,
+            child: IgnorePointer(
+              child: Container(
+                width: 300,
+                height: 300,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFF3B82F6).withValues(alpha: 0.28),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 360),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppTokens.pagePad,
+                    vertical: AppTokens.xxl,
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const SizedBox(height: 32),
+                      const Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TeamUpLogo(size: 112),
+                          SizedBox(height: 22),
+                          SkillConnectWordmark(
+                            fontSize: 34,
+                            showTagline: true,
+                            forceDarkCanvas: true,
+                          ),
+                        ],
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppTokens.lg),
+                        child: SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            backgroundColor: const Color(0xFF282442),
+                            valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF635BFF)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -265,7 +294,12 @@ class _Gate extends StatelessWidget {
 }
 
 // ============================================================================
-// 1. AUTH SCREEN (Polished Hero + Quick Demo Hint + Theme Switcher)
+// 1. AUTH SCREEN (Molded after uploaded Image 2: SkillConnect Dark Navy Hero)
+//    - Top constellation logo + "SkillConnect" + "Bridging talents, building futures."
+//    - Isometric glowing team collaboration illustration
+//    - "Welcome to SkillConnect" + "Discover opportunities, connect with experts, and grow your team."
+//    - Pill buttons: "Get Started" (#5B53FF) & "Create an account" (dark outlined pill)
+//    - Smooth inline Sign-In / Sign-Up form when tapped + pagination indicator & Terms footer
 // ============================================================================
 class _AuthScreen extends StatefulWidget {
   final VoidCallback onToggleTheme;
@@ -275,14 +309,16 @@ class _AuthScreen extends StatefulWidget {
 }
 
 class _AuthScreenState extends State<_AuthScreen> {
-  bool _isSignUp = false;
+  // null = Welcome Landing Screen (Image 2); false = Sign In form; true = Create Account form
+  bool? _authMode;
   final _name = TextEditingController(text: 'Ahad Khan');
   final _email = TextEditingController(text: 'demo@teamup.app');
   final _pass = TextEditingController(text: 'password123');
 
   Future<void> _submit() async {
+    final isSignUp = _authMode == true;
     final auth = context.read<AuthController>();
-    final err = _isSignUp
+    final err = isSignUp
         ? await auth.signUp(_name.text, _email.text, _pass.text)
         : await auth.signIn(_email.text, _pass.text);
     if (err != null && mounted) {
@@ -293,234 +329,325 @@ class _AuthScreenState extends State<_AuthScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthController>();
-    final p = AppPalette.of(context);
+    const bgNavy = Color(0xFF0E0C1D);
+    const primaryViolet = Color(0xFF5D55FA);
+    const mutedText = Color(0xFF9E9BB0);
+    const fieldFill = Color(0xFF19162D);
+    const fieldBorder = Color(0xFF2E2A4A);
+
     return Scaffold(
-      body: _StitchGradientBackground(
-        child: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Flexible(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: p.primaryTint,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.verified_rounded, size: 14, color: p.primary),
-                                const SizedBox(width: 5),
-                                Flexible(
-                                  child: Text(
-                                    'University Teammate Finder',
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.w700,
-                                      color: p.onPrimaryTint,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton.filledTonal(
-                          tooltip: 'Toggle Light / Dark Theme',
-                          onPressed: widget.onToggleTheme,
-                          style: IconButton.styleFrom(backgroundColor: p.iconBtn),
-                          icon: Icon(
-                            p.isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
-                            color: p.isDark ? AppTokens.accent : p.primary,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    const TeamUpLogo(size: 76),
-                    const SizedBox(height: 14),
-                    Text(
-                      'TeamUp',
-                      style: TextStyle(
-                        fontSize: 32,
-                        letterSpacing: -0.6,
-                        fontWeight: FontWeight.w800,
-                        color: p.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Match by skills, build balanced FYP & semester teams.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 13.5, color: p.onSurfaceSecondary),
-                    ),
-                    const SizedBox(height: 22),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: p.surface,
-                        borderRadius: BorderRadius.circular(AppTokens.radiusXl),
-                        border: Border.all(color: p.border),
-                        boxShadow: p.cardShadow,
-                      ),
-                      padding: const EdgeInsets.all(22),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: p.surfaceSubtle,
-                              borderRadius: BorderRadius.circular(AppTokens.radiusMd),
-                              border: Border.all(color: p.border),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: _AuthTabBtn(
-                                    label: 'Sign In',
-                                    selected: !_isSignUp,
-                                    onTap: () => setState(() => _isSignUp = false),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: _AuthTabBtn(
-                                    label: 'Create Account',
-                                    selected: _isSignUp,
-                                    onTap: () => setState(() => _isSignUp = true),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          if (_isSignUp) ...[
-                            TextField(
-                              controller: _name,
-                              decoration: const InputDecoration(
-                                labelText: 'Full Name',
-                                prefixIcon: Icon(Icons.person_outline_rounded),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                          ],
-                          TextField(
-                            controller: _email,
-                            keyboardType: TextInputType.emailAddress,
-                            decoration: const InputDecoration(
-                              labelText: 'University Email',
-                              prefixIcon: Icon(Icons.alternate_email_rounded),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: _pass,
-                            obscureText: true,
-                            decoration: const InputDecoration(
-                              labelText: 'Password (min 6 chars)',
-                              prefixIcon: Icon(Icons.lock_outline_rounded),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Container(
-                            padding: const EdgeInsets.all(11),
-                            decoration: BoxDecoration(
-                              color: p.primaryTint.withValues(alpha: 0.7),
-                              borderRadius: BorderRadius.circular(AppTokens.radiusMd),
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Icon(Icons.auto_awesome_rounded, size: 16, color: p.primary),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    _isSignUp
-                                        ? 'Step 1: Set up your personal skills, university & experience.\nStep 2: Create projects or apply to open teams inside!'
-                                        : 'Demo ready: Tap Sign In to explore 18 student profiles, 2 active projects, 5 open teams & 3 requests.',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: p.onPrimaryTint,
-                                      height: 1.35,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          FilledButton.icon(
-                            onPressed: auth.busy ? null : _submit,
-                            icon: auth.busy
-                                ? SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: p.onPrimary,
-                                    ),
-                                  )
-                                : Icon(
-                                    _isSignUp
-                                        ? Icons.arrow_forward_rounded
-                                        : Icons.login_rounded,
-                                    size: 18,
-                                  ),
-                            label: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 2),
-                              child: Text(_isSignUp ? 'Continue to Profile Setup' : 'Sign In to TeamUp'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+      backgroundColor: bgNavy,
+      body: Stack(
+        children: [
+          // Top-left & top-right ambient purple nebula glow matching Image 2
+          Positioned(
+            top: -70,
+            left: -60,
+            child: IgnorePointer(
+              child: Container(
+                width: 240,
+                height: 240,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      primaryViolet.withValues(alpha: 0.30),
+                      Colors.transparent,
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AuthTabBtn extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  const _AuthTabBtn({required this.label, required this.selected, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final p = AppPalette.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: selected ? p.primary : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppTokens.radiusSm),
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: selected ? p.onPrimary : p.onSurfaceSecondary,
+          Positioned(
+            bottom: -80,
+            right: -60,
+            child: IgnorePointer(
+              child: Container(
+                width: 260,
+                height: 260,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFF3B82F6).withValues(alpha: 0.22),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
-        ),
+          SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // 1. Constellation Logo + SkillConnect Wordmark + Tagline
+                      const TeamUpLogo(size: 66),
+                      const SizedBox(height: 12),
+                      const SkillConnectWordmark(
+                        fontSize: 28,
+                        showTagline: true,
+                        forceDarkCanvas: true,
+                      ),
+                      const SizedBox(height: 18),
+
+                      // 2. Central Isometric Team Collaboration Illustration (from Image 2)
+                      const SkillConnectHeroIllustration(height: 175),
+                      const SizedBox(height: 18),
+
+                      // 3. Welcome Headline & Subtitle
+                      const Text(
+                        'Welcome to SkillConnect',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: -0.4,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Discover opportunities, connect with experts,\nand grow your team.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13,
+                          height: 1.4,
+                          color: mutedText,
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+
+                      // 4. Either the 2 Landing Buttons (Image 2) OR the expanded Sign-In / Sign-Up fields
+                      if (_authMode == null) ...[
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: FilledButton(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: primaryViolet,
+                              foregroundColor: Colors.white,
+                              shape: const StadiumBorder(),
+                            ),
+                            onPressed: () => setState(() => _authMode = false),
+                            child: const Text(
+                              'Get Started',
+                              style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              backgroundColor: Colors.transparent,
+                              side: const BorderSide(color: Color(0xFF3A3656), width: 1.2),
+                              shape: const StadiumBorder(),
+                            ),
+                            onPressed: () => setState(() => _authMode = true),
+                            child: const Text(
+                              'Create an account',
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                      ] else ...[
+                        // Expanded Auth Form styled in the exact same Dark Navy / Violet aesthetic
+                        Container(
+                          padding: const EdgeInsets.all(18),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF151226),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: fieldBorder),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Wrap(
+                                alignment: WrapAlignment.spaceBetween,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: 8,
+                                runSpacing: 4,
+                                children: [
+                                  Text(
+                                    _authMode == true ? 'Create an account' : 'Sign In',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  TextButton(
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    onPressed: () => setState(() => _authMode = !(_authMode ?? false)),
+                                    child: Text(
+                                      _authMode == true ? 'Sign In instead' : 'Create account',
+                                      style: const TextStyle(
+                                        color: Color(0xFF8C84FF),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              if (_authMode == true) ...[
+                                TextField(
+                                  controller: _name,
+                                  style: const TextStyle(color: Colors.white, fontSize: 13.5),
+                                  decoration: InputDecoration(
+                                    labelText: 'Full Name',
+                                    labelStyle: const TextStyle(color: mutedText),
+                                    prefixIcon: const Icon(Icons.person_outline_rounded, color: mutedText),
+                                    filled: true,
+                                    fillColor: fieldFill,
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(999),
+                                      borderSide: const BorderSide(color: fieldBorder),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(999),
+                                      borderSide: const BorderSide(color: primaryViolet, width: 1.5),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                              ],
+                              TextField(
+                                controller: _email,
+                                keyboardType: TextInputType.emailAddress,
+                                style: const TextStyle(color: Colors.white, fontSize: 13.5),
+                                decoration: InputDecoration(
+                                  labelText: 'University Email',
+                                  labelStyle: const TextStyle(color: mutedText),
+                                  prefixIcon: const Icon(Icons.alternate_email_rounded, color: mutedText),
+                                  filled: true,
+                                  fillColor: fieldFill,
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(999),
+                                    borderSide: const BorderSide(color: fieldBorder),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(999),
+                                    borderSide: const BorderSide(color: primaryViolet, width: 1.5),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              TextField(
+                                controller: _pass,
+                                obscureText: true,
+                                style: const TextStyle(color: Colors.white, fontSize: 13.5),
+                                decoration: InputDecoration(
+                                  labelText: 'Password (min 6 chars)',
+                                  labelStyle: const TextStyle(color: mutedText),
+                                  prefixIcon: const Icon(Icons.lock_outline_rounded, color: mutedText),
+                                  filled: true,
+                                  fillColor: fieldFill,
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(999),
+                                    borderSide: const BorderSide(color: fieldBorder),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(999),
+                                    borderSide: const BorderSide(color: primaryViolet, width: 1.5),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              SizedBox(
+                                height: 46,
+                                child: FilledButton(
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: primaryViolet,
+                                    foregroundColor: Colors.white,
+                                    shape: const StadiumBorder(),
+                                  ),
+                                  onPressed: auth.busy ? null : _submit,
+                                  child: auth.busy
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : Text(
+                                          _authMode == true ? 'Continue to Profile Setup' : 'Sign In to SkillConnect',
+                                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                                        ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      const SizedBox(height: 18),
+                      // 5. Carousel pagination indicator dots + Terms footer from Image 2
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 16,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.65),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          for (var i = 0; i < 3; i++)
+                            Container(
+                              width: 5,
+                              height: 5,
+                              margin: const EdgeInsets.only(right: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.22),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      RichText(
+                        textAlign: TextAlign.center,
+                        text: const TextSpan(
+                          style: TextStyle(fontSize: 11, color: mutedText),
+                          children: [
+                            TextSpan(text: 'By continuing, you agree to our '),
+                            TextSpan(
+                              text: 'Terms...',
+                              style: TextStyle(
+                                decoration: TextDecoration.underline,
+                                color: Color(0xFFB8B4CC),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -3736,12 +3863,15 @@ class _ChipSection extends StatelessWidget {
           children: options.map((o) {
             final isSel = selected.contains(o);
             return FilterChip(
+              selectedColor: AppTokens.jetBlack,
+              checkmarkColor: Colors.white,
+              backgroundColor: p.isDark ? p.neutralTint : Colors.white.withValues(alpha: 0.85),
               label: Text(
                 o,
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: isSel ? FontWeight.w700 : FontWeight.w500,
-                  color: isSel ? p.onPrimaryTint : p.onSurface,
+                  color: isSel ? Colors.white : p.onSurface,
                 ),
               ),
               selected: isSel,
@@ -4058,17 +4188,29 @@ Future<void> _showCreateProjectDialog(BuildContext context) async {
                   spacing: 6,
                   runSpacing: 6,
                   children: kRoles
-                      .map((r) => FilterChip(
-                            label: Text(r, style: const TextStyle(fontSize: 12)),
-                            selected: roles.contains(r),
-                            onSelected: (sel) => setDialogState(() {
-                              if (sel) {
-                                roles.add(r);
-                              } else {
-                                roles.remove(r);
-                              }
-                            }),
-                          ))
+                      .map((r) {
+                        final isSel = roles.contains(r);
+                        return FilterChip(
+                          selectedColor: AppTokens.jetBlack,
+                          checkmarkColor: Colors.white,
+                          label: Text(
+                            r,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: isSel ? FontWeight.w700 : FontWeight.w500,
+                              color: isSel ? Colors.white : null,
+                            ),
+                          ),
+                          selected: isSel,
+                          onSelected: (sel) => setDialogState(() {
+                            if (sel) {
+                              roles.add(r);
+                            } else {
+                              roles.remove(r);
+                            }
+                          }),
+                        );
+                      })
                       .toList(),
                 ),
                 const SizedBox(height: 14),
@@ -4081,17 +4223,29 @@ Future<void> _showCreateProjectDialog(BuildContext context) async {
                   spacing: 6,
                   runSpacing: 6,
                   children: kSkills
-                      .map((s) => FilterChip(
-                            label: Text(s, style: const TextStyle(fontSize: 11.5)),
-                            selected: reqSkills.contains(s),
-                            onSelected: (sel) => setDialogState(() {
-                              if (sel) {
-                                reqSkills.add(s);
-                              } else {
-                                reqSkills.remove(s);
-                              }
-                            }),
-                          ))
+                      .map((s) {
+                        final isSel = reqSkills.contains(s);
+                        return FilterChip(
+                          selectedColor: AppTokens.jetBlack,
+                          checkmarkColor: Colors.white,
+                          label: Text(
+                            s,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: isSel ? FontWeight.w700 : FontWeight.w500,
+                              color: isSel ? Colors.white : null,
+                            ),
+                          ),
+                          selected: isSel,
+                          onSelected: (sel) => setDialogState(() {
+                            if (sel) {
+                              reqSkills.add(s);
+                            } else {
+                              reqSkills.remove(s);
+                            }
+                          }),
+                        );
+                      })
                       .toList(),
                 ),
                 const SizedBox(height: 14),
@@ -4101,17 +4255,29 @@ Future<void> _showCreateProjectDialog(BuildContext context) async {
                   spacing: 6,
                   runSpacing: 6,
                   children: kInterests
-                      .map((d) => FilterChip(
-                            label: Text(d, style: const TextStyle(fontSize: 11.5)),
-                            selected: domains.contains(d),
-                            onSelected: (sel) => setDialogState(() {
-                              if (sel) {
-                                domains.add(d);
-                              } else {
-                                domains.remove(d);
-                              }
-                            }),
-                          ))
+                      .map((d) {
+                        final isSel = domains.contains(d);
+                        return FilterChip(
+                          selectedColor: AppTokens.jetBlack,
+                          checkmarkColor: Colors.white,
+                          label: Text(
+                            d,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: isSel ? FontWeight.w700 : FontWeight.w500,
+                              color: isSel ? Colors.white : null,
+                            ),
+                          ),
+                          selected: isSel,
+                          onSelected: (sel) => setDialogState(() {
+                            if (sel) {
+                              domains.add(d);
+                            } else {
+                              domains.remove(d);
+                            }
+                          }),
+                        );
+                      })
                       .toList(),
                 ),
               ],
@@ -4306,17 +4472,29 @@ Future<void> _showEditProjectDialog(BuildContext context, Team team) async {
                   spacing: 6,
                   runSpacing: 6,
                   children: kRoles
-                      .map((r) => FilterChip(
-                            label: Text(r, style: const TextStyle(fontSize: 12)),
-                            selected: roles.contains(r),
-                            onSelected: (sel) => setDialogState(() {
-                              if (sel) {
-                                roles.add(r);
-                              } else {
-                                roles.remove(r);
-                              }
-                            }),
-                          ))
+                      .map((r) {
+                        final isSel = roles.contains(r);
+                        return FilterChip(
+                          selectedColor: AppTokens.jetBlack,
+                          checkmarkColor: Colors.white,
+                          label: Text(
+                            r,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: isSel ? FontWeight.w700 : FontWeight.w500,
+                              color: isSel ? Colors.white : null,
+                            ),
+                          ),
+                          selected: isSel,
+                          onSelected: (sel) => setDialogState(() {
+                            if (sel) {
+                              roles.add(r);
+                            } else {
+                              roles.remove(r);
+                            }
+                          }),
+                        );
+                      })
                       .toList(),
                 ),
                 const SizedBox(height: 14),
@@ -4329,17 +4507,29 @@ Future<void> _showEditProjectDialog(BuildContext context, Team team) async {
                   spacing: 6,
                   runSpacing: 6,
                   children: kSkills
-                      .map((s) => FilterChip(
-                            label: Text(s, style: const TextStyle(fontSize: 11.5)),
-                            selected: reqSkills.contains(s),
-                            onSelected: (sel) => setDialogState(() {
-                              if (sel) {
-                                reqSkills.add(s);
-                              } else {
-                                reqSkills.remove(s);
-                              }
-                            }),
-                          ))
+                      .map((s) {
+                        final isSel = reqSkills.contains(s);
+                        return FilterChip(
+                          selectedColor: AppTokens.jetBlack,
+                          checkmarkColor: Colors.white,
+                          label: Text(
+                            s,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: isSel ? FontWeight.w700 : FontWeight.w500,
+                              color: isSel ? Colors.white : null,
+                            ),
+                          ),
+                          selected: isSel,
+                          onSelected: (sel) => setDialogState(() {
+                            if (sel) {
+                              reqSkills.add(s);
+                            } else {
+                              reqSkills.remove(s);
+                            }
+                          }),
+                        );
+                      })
                       .toList(),
                 ),
                 const SizedBox(height: 14),
@@ -4349,17 +4539,29 @@ Future<void> _showEditProjectDialog(BuildContext context, Team team) async {
                   spacing: 6,
                   runSpacing: 6,
                   children: kInterests
-                      .map((d) => FilterChip(
-                            label: Text(d, style: const TextStyle(fontSize: 11.5)),
-                            selected: domains.contains(d),
-                            onSelected: (sel) => setDialogState(() {
-                              if (sel) {
-                                domains.add(d);
-                              } else {
-                                domains.remove(d);
-                              }
-                            }),
-                          ))
+                      .map((d) {
+                        final isSel = domains.contains(d);
+                        return FilterChip(
+                          selectedColor: AppTokens.jetBlack,
+                          checkmarkColor: Colors.white,
+                          label: Text(
+                            d,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: isSel ? FontWeight.w700 : FontWeight.w500,
+                              color: isSel ? Colors.white : null,
+                            ),
+                          ),
+                          selected: isSel,
+                          onSelected: (sel) => setDialogState(() {
+                            if (sel) {
+                              domains.add(d);
+                            } else {
+                              domains.remove(d);
+                            }
+                          }),
+                        );
+                      })
                       .toList(),
                 ),
               ],

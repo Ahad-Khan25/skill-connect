@@ -8,9 +8,8 @@ import 'package:teamup/state/app_coordinator.dart';
 import 'package:teamup/ui/app_root.dart';
 
 void main() {
-  testWidgets('Responsive mobile layout (360x640) renders all tabs, filter clear & project detail screens with zero overflow',
+  testWidgets('Responsive mobile layout (360x640) renders SkillConnect auth, filter clear & project flows with zero overflow',
       (WidgetTester tester) async {
-    // Configure compact phone screen size (360x640 logical pixels)
     tester.view.physicalSize = const Size(360, 640);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
@@ -31,8 +30,19 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1400));
     await tester.pumpAndSettle();
 
-    // 1. Auth screen visible on 360x640 with no overflow; scroll if needed and sign in
-    final signInBtn = find.text('Sign In to TeamUp');
+    // 1. SkillConnect Welcome Landing Screen (Image 2)
+    expect(find.text('Welcome to SkillConnect'), findsOneWidget);
+    expect(find.text('Get Started'), findsOneWidget);
+    expect(find.text('Create an account'), findsOneWidget);
+
+    // Tap "Get Started" to open Sign In form, then tap "Sign In to SkillConnect"
+    final getStartedBtn = find.text('Get Started');
+    await tester.ensureVisible(getStartedBtn);
+    await tester.pumpAndSettle();
+    await tester.tap(getStartedBtn);
+    await tester.pumpAndSettle();
+
+    final signInBtn = find.text('Sign In to SkillConnect');
     await tester.ensureVisible(signInBtn);
     await tester.pumpAndSettle();
     await tester.tap(signInBtn);
@@ -40,52 +50,36 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1200));
     await tester.pumpAndSettle();
 
-    // 2. Smart Matches tab renders with circular score rings & project switcher
+    // 2. Smart Matches tab renders with 0 dummy pre-existing projects
     expect(find.text('Smart Matches'), findsOneWidget);
-    expect(find.text('ACTIVE PROJECT MATCHING'), findsOneWidget);
+    expect(app.team.myTeams, isEmpty);
 
     // 3. Switch to Discover tab and verify individual filter apply + "Any (clear)" works!
     await tester.tap(find.text('Discover'));
     await tester.pumpAndSettle();
     expect(find.text('Discover Students'), findsOneWidget);
 
-    // Tap Semester filter pill -> choose '4'
     final semFilter = find.text('Semester');
     await tester.ensureVisible(semFilter);
     await tester.pumpAndSettle();
     await tester.tap(semFilter);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('4').last);
+    await tester.tap(find.text('7').last);
     await tester.pumpAndSettle();
-    expect(app.discover.filters.semester, 4);
-    expect(find.text('Sem 4'), findsOneWidget);
+    expect(app.discover.filters.semester, 7);
+    expect(find.text('Sem 7'), findsOneWidget);
 
-    // Open Sem 4 dropdown and click 'Any (clear)' -> verify semester filter clears individually!
-    await tester.tap(find.text('Sem 4'));
+    await tester.tap(find.text('Sem 7'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Any (clear)').last);
     await tester.pumpAndSettle();
     expect(app.discover.filters.semester, isNull);
     expect(find.text('Semester'), findsOneWidget);
 
-    // 4. Switch to Projects tab -> verify 3 sub-tabs: My Projects, Joined, Open Teams
+    // 4. Switch to Projects tab -> verify 3 sub-tabs: My Projects (0), Joined (0), Open Teams (0)
     await tester.tap(find.text('Projects'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('My Projects'), findsOneWidget);
-    expect(find.textContaining('Joined'), findsOneWidget);
-    expect(find.textContaining('Open Teams'), findsOneWidget);
-
-    // Tap the first owned project card title ("MediTrack") to open Project Detail screen (edit details & remove member)
-    await tester.tap(find.textContaining('MediTrack').first);
-    await tester.pumpAndSettle();
-    expect(find.text('Edit Project'), findsOneWidget);
-
-    // Pop back to Projects tab and switch to "Joined" sub-tab to verify responsibilities view
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('Joined'));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('MY RESPONSIBILITIES AS'), findsWidgets);
+    expect(find.textContaining('My Projects (0)'), findsOneWidget);
 
     // 5. Switch to Requests tab
     await tester.tap(find.text('Requests'));

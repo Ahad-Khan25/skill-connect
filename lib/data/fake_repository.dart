@@ -90,7 +90,8 @@ class FakeRepository implements Repository {
     _uid = 'user-$e';
     _email = e;
     if (!_passwords.containsKey(e) && _me == null) {
-      // Unknown email in fake mode -> demo account with a ready profile + 2 projects.
+      // Unknown email in fake mode -> demo account with a ready personal profile,
+      // and NO pre-existing dummy projects (projects are created fresh by the user!).
       _passwords[e] = password;
       _signUpName = 'Ahad Khan';
       final me = Profile(
@@ -111,47 +112,6 @@ class FakeRepository implements Repository {
       );
       _profiles.add(me);
       _seedForNewProfile(me);
-
-      // Demo project #1 (FYP - Health Tech + AI)
-      _teams.add(_Team(
-        id: _id(),
-        ownerId: me.id,
-        title: 'MediTrack – AI Health Companion',
-        description: 'Cross-platform mobile health tracker with AI symptom triage, medication reminders, and doctor PDF reports.',
-        projectType: 'FYP',
-        rolesNeeded: ['Designer', 'Report Writer'],
-        requiredSkills: ['UI/UX Design', 'Figma', 'Technical Writing', 'Machine Learning'],
-        domainTags: ['Health Tech', 'AI', 'Mobile Apps'],
-        members: [
-          _Member(me.id, 'Owner'),
-          _Member(sampleId(4), 'Data/ML Engineer'),
-        ],
-      ));
-
-      // Demo project #2 (Semester Project - Web & FinTech) so user can switch active projects
-      // and immediately see Smart Match recalculate!
-      _teams.add(_Team(
-        id: _id(),
-        ownerId: me.id,
-        title: 'PaySplit – Campus Expense Manager',
-        description: 'Semester project for Web Engineering: real-time bill splitting and hostel expense analytics dashboard.',
-        projectType: 'Semester Project',
-        rolesNeeded: ['Developer', 'Tester'],
-        requiredSkills: ['React', 'Node.js', 'SQL', 'Automation Testing'],
-        domainTags: ['Web Development', 'FinTech'],
-        members: [
-          _Member(me.id, 'Owner'),
-        ],
-      ));
-
-      // Also add the demo user as a joined member ('Developer') on one of the sample teams
-      // (Iqra Shahid's "UrduEdu AI – Smart Study Tutor") so the "Joined Projects & My Responsibilities"
-      // screen has an immediate example ready to inspect!
-      final joinedSample = _teams.where((t) => t.id == sampleTeamId(1)).firstOrNull;
-      if (joinedSample != null && !joinedSample.members.any((m) => m.profileId == me.id)) {
-        joinedSample.members.add(_Member(me.id, 'Developer'));
-        joinedSample.rolesNeeded.remove('Developer');
-      }
     }
     _auth.add(true);
   }
@@ -187,7 +147,7 @@ class FakeRepository implements Repository {
   }
 
   void _seedForNewProfile(Profile me) {
-    final senders = [sampleId(3), sampleId(15), sampleId(13)];
+    final senders = [sampleId(3), sampleId(4), sampleId(5)];
     for (var i = 0; i < senders.length; i++) {
       _requests.add(_Req(
         id: _id(),
