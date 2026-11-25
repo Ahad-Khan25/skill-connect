@@ -44,7 +44,17 @@ class SupabaseRepository implements Repository {
         if (res.user != null && (res.user!.identities?.isEmpty ?? false)) {
           throw const AppException('This email is already registered. Try signing in.');
         }
-        return res.session != null;
+        if (res.session != null) return true;
+        // If a database trigger auto-confirmed the user, signing in immediately succeeds.
+        try {
+          final signInRes = await _db.auth.signInWithPassword(
+            email: email.trim(),
+            password: password,
+          );
+          return signInRes.session != null;
+        } catch (_) {
+          return false;
+        }
       });
 
   @override

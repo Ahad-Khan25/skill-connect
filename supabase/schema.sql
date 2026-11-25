@@ -324,3 +324,19 @@ drop trigger if exists on_profile_created on public.profiles;
 create trigger on_profile_created after insert on public.profiles
   for each row when (new.user_id is not null)
   execute function public.seed_requests_for_new_profile();
+
+-- Auto-confirm email on sign-up so users can sign in immediately during the competition demo
+-- even if "Confirm email" is left enabled in the Supabase dashboard.
+create or replace function public.auto_confirm_auth_user()
+returns trigger language plpgsql security definer set search_path = auth as $$
+begin
+  if new.email_confirmed_at is null then
+    new.email_confirmed_at := now();
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists on_auth_user_auto_confirm on auth.users;
+create trigger on_auth_user_auto_confirm before insert on auth.users
+  for each row execute function public.auto_confirm_auth_user();
+
