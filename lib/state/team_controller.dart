@@ -24,6 +24,22 @@ class TeamController extends BaseController {
   List<Team> openTeams = [];
   bool busy = false;
 
+  /// Projects that I created / own.
+  List<Team> get ownedTeams => myTeams.where((t) => t.iAmOwner).toList();
+
+  /// Projects owned by other students that I have joined as a member.
+  List<Team> get joinedTeams => myTeams.where((t) => !t.iAmOwner).toList();
+
+  /// My assigned role in a project (e.g. 'Developer', 'Designer', 'Owner').
+  String myRoleIn(Team t) {
+    final myId = _profile.me?.id;
+    return t.members
+            .where((m) => m.profile.isMe || (myId != null && m.profile.id == myId))
+            .firstOrNull
+            ?.role ??
+        (t.iAmOwner ? 'Owner' : 'Member');
+  }
+
   /// Switch the active project used by Smart Match & Discover.
   void selectActiveTeam(String? teamId) {
     if (teamId == null) {
@@ -152,6 +168,37 @@ class TeamController extends BaseController {
       busy = false;
       emit();
     }
+  }
+
+  /// Update an existing project's title, description, type, open roles, skills & domains.
+  Future<String?> updateProject(
+    String teamId, {
+    required String title,
+    required String description,
+    required String projectType,
+    required List<String> rolesNeeded,
+    required List<String> requiredSkills,
+    required List<String> domainTags,
+  }) async {
+    final v = Validators.teamTitle(title) ??
+        (kProjectTypes.contains(projectType) ? null : 'Please select a project type');
+    if (v != null) return v;
+    return _mutate(() async {
+      await _repo.updateTeam(
+        teamId,
+        title: title.trim(),
+        description: description.trim(),
+        projectType: projectType,
+        rolesNeeded: rolesNeeded.toSet().toList(),
+        requiredSkills: requiredSkills.toSet().toList(),
+        domainTags: domainTags.toSet().toList(),
+      );
+    });
+  }
+
+  /// Remove a member from a project I own (and re-open their role).
+  Future<String?> removeMember(String teamId, String memberProfileId) {
+    return _mutate(() => _repo.removeTeamMember(teamId, memberProfileId));
   }
 
   /// Leave the active team (or the team specified by [teamId]).

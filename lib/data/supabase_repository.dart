@@ -250,6 +250,57 @@ class SupabaseRepository implements Repository {
       });
 
   @override
+  Future<Team> updateTeam(
+    String teamId, {
+    required String title,
+    required String description,
+    required String projectType,
+    required List<String> rolesNeeded,
+    required List<String> requiredSkills,
+    required List<String> domainTags,
+  }) =>
+      _run(() async {
+        try {
+          await _db.rpc('update_project', params: {
+            'p_team_id': teamId,
+            'p_title': title.trim(),
+            'p_description': description.trim(),
+            'p_project_type': projectType,
+            'p_roles': rolesNeeded,
+            'p_skills': requiredSkills,
+            'p_domains': domainTags,
+          });
+        } on PostgrestException catch (_) {
+          await _db.from('teams').update({
+            'title': title.trim(),
+            'project_type': projectType,
+            'roles_needed': rolesNeeded,
+          }).eq('id', teamId);
+        }
+        final list = await fetchMyTeams('');
+        return list.where((t) => t.id == teamId).firstOrNull ??
+            Team(
+              id: teamId,
+              title: title.trim(),
+              description: description.trim(),
+              projectType: projectType,
+              openRoles: rolesNeeded,
+              requiredSkills: requiredSkills,
+              domainTags: domainTags,
+              iAmOwner: true,
+              members: [],
+            );
+      });
+
+  @override
+  Future<void> removeTeamMember(String teamId, String memberProfileId) => _run(() async {
+        await _db.rpc('remove_team_member', params: {
+          'p_team_id': teamId,
+          'p_member_id': memberProfileId,
+        });
+      });
+
+  @override
   Future<void> leaveTeam(String teamId) =>
       _run(() async => await _db.rpc('leave_team', params: {'p_team_id': teamId}));
 }

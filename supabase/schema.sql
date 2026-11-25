@@ -170,6 +170,48 @@ begin
   return new_id;
 end $$;
 
+create or replace function public.update_project(
+  p_team_id uuid,
+  p_title text,
+  p_description text,
+  p_project_type text,
+  p_roles text[],
+  p_skills text[] default '{}',
+  p_domains text[] default '{}'
+)
+returns void language plpgsql security definer set search_path = public as $$
+declare me uuid := public.my_profile_id(); t teams%rowtype;
+begin
+  select * into t from teams where id = p_team_id for update;
+  if not found then raise exception 'Project not found.'; end if;
+  if t.owner_profile <> me then raise exception 'Only the project owner can edit project details.'; end if;
+  update teams set
+    title = trim(p_title),
+    description = left(trim(coalesce(p_description, '')), 500),
+    project_type = p_project_type,
+    roles_needed = coalesce((select array_agg(distinct x) from unnest(p_roles) x), '{}'),
+    required_skills = coalesce((select array_agg(distinct x) from unnest(p_skills) x), '{}'),
+    domain_tags = coalesce((select array_agg(distinct x) from unnest(p_domains) x), '{}')
+  where id = p_team_id;
+end $$;
+
+create or replace function public.remove_team_member(p_team_id uuid, p_member_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare me uuid := public.my_profile_id(); t teams%rowtype; m team_members%rowtype;
+begin
+  select * into t from teams where id = p_team_id for update;
+  if not found then raise exception 'Project not found.'; end if;
+  if t.owner_profile <> me then raise exception 'Only the project owner can remove members.'; end if;
+  if p_member_id = me then raise exception 'Owner cannot remove themselves.'; end if;
+  select * into m from team_members where team_id = p_team_id and profile_id = p_member_id;
+  if not found then raise exception 'Member not found.'; end if;
+  delete from team_members where team_id = p_team_id and profile_id = p_member_id;
+  if m.role in ('Developer','Designer','Tester','Report Writer','Data/ML Engineer')
+     and not (m.role = any(t.roles_needed)) then
+    update teams set roles_needed = array_append(roles_needed, m.role) where id = p_team_id;
+  end if;
+end $$;
+
 -- Accept: the joiner is normally the SENDER. If the request carries a team
 -- the sender already belongs to (an invitation), the RECEIVER joins it.
 create or replace function public.accept_request(p_request_id uuid)
@@ -258,6 +300,48 @@ begin
   return new_id;
 end $$;
 
+create or replace function public.update_project(
+  p_team_id uuid,
+  p_title text,
+  p_description text,
+  p_project_type text,
+  p_roles text[],
+  p_skills text[] default '{}',
+  p_domains text[] default '{}'
+)
+returns void language plpgsql security definer set search_path = public as $$
+declare me uuid := public.my_profile_id(); t teams%rowtype;
+begin
+  select * into t from teams where id = p_team_id for update;
+  if not found then raise exception 'Project not found.'; end if;
+  if t.owner_profile <> me then raise exception 'Only the project owner can edit project details.'; end if;
+  update teams set
+    title = trim(p_title),
+    description = left(trim(coalesce(p_description, '')), 500),
+    project_type = p_project_type,
+    roles_needed = coalesce((select array_agg(distinct x) from unnest(p_roles) x), '{}'),
+    required_skills = coalesce((select array_agg(distinct x) from unnest(p_skills) x), '{}'),
+    domain_tags = coalesce((select array_agg(distinct x) from unnest(p_domains) x), '{}')
+  where id = p_team_id;
+end $$;
+
+create or replace function public.remove_team_member(p_team_id uuid, p_member_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare me uuid := public.my_profile_id(); t teams%rowtype; m team_members%rowtype;
+begin
+  select * into t from teams where id = p_team_id for update;
+  if not found then raise exception 'Project not found.'; end if;
+  if t.owner_profile <> me then raise exception 'Only the project owner can remove members.'; end if;
+  if p_member_id = me then raise exception 'Owner cannot remove themselves.'; end if;
+  select * into m from team_members where team_id = p_team_id and profile_id = p_member_id;
+  if not found then raise exception 'Member not found.'; end if;
+  delete from team_members where team_id = p_team_id and profile_id = p_member_id;
+  if m.role in ('Developer','Designer','Tester','Report Writer','Data/ML Engineer')
+     and not (m.role = any(t.roles_needed)) then
+    update teams set roles_needed = array_append(roles_needed, m.role) where id = p_team_id;
+  end if;
+end $$;
+
 create or replace function public.create_project(
   p_title text,
   p_description text,
@@ -283,6 +367,48 @@ begin
   returning id into new_id;
   insert into team_members (team_id, profile_id, role) values (new_id, me, 'Owner');
   return new_id;
+end $$;
+
+create or replace function public.update_project(
+  p_team_id uuid,
+  p_title text,
+  p_description text,
+  p_project_type text,
+  p_roles text[],
+  p_skills text[] default '{}',
+  p_domains text[] default '{}'
+)
+returns void language plpgsql security definer set search_path = public as $$
+declare me uuid := public.my_profile_id(); t teams%rowtype;
+begin
+  select * into t from teams where id = p_team_id for update;
+  if not found then raise exception 'Project not found.'; end if;
+  if t.owner_profile <> me then raise exception 'Only the project owner can edit project details.'; end if;
+  update teams set
+    title = trim(p_title),
+    description = left(trim(coalesce(p_description, '')), 500),
+    project_type = p_project_type,
+    roles_needed = coalesce((select array_agg(distinct x) from unnest(p_roles) x), '{}'),
+    required_skills = coalesce((select array_agg(distinct x) from unnest(p_skills) x), '{}'),
+    domain_tags = coalesce((select array_agg(distinct x) from unnest(p_domains) x), '{}')
+  where id = p_team_id;
+end $$;
+
+create or replace function public.remove_team_member(p_team_id uuid, p_member_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare me uuid := public.my_profile_id(); t teams%rowtype; m team_members%rowtype;
+begin
+  select * into t from teams where id = p_team_id for update;
+  if not found then raise exception 'Project not found.'; end if;
+  if t.owner_profile <> me then raise exception 'Only the project owner can remove members.'; end if;
+  if p_member_id = me then raise exception 'Owner cannot remove themselves.'; end if;
+  select * into m from team_members where team_id = p_team_id and profile_id = p_member_id;
+  if not found then raise exception 'Member not found.'; end if;
+  delete from team_members where team_id = p_team_id and profile_id = p_member_id;
+  if m.role in ('Developer','Designer','Tester','Report Writer','Data/ML Engineer')
+     and not (m.role = any(t.roles_needed)) then
+    update teams set roles_needed = array_append(roles_needed, m.role) where id = p_team_id;
+  end if;
 end $$;
 
 -- Member leaves -> their role re-opens. Owner leaves -> team disbanded.
@@ -384,6 +510,8 @@ end $$;
 grant execute on function public.send_request(uuid, text, uuid), public.accept_request(uuid),
   public.reject_request(uuid), public.cancel_request(uuid), public.create_team(text, text, text[]),
   public.create_project(text, text, text, text[], text[], text[]),
+  public.update_project(uuid, text, text, text, text[], text[], text[]),
+  public.remove_team_member(uuid, uuid),
   public.leave_team(uuid), public.get_my_team(), public.get_my_teams(), public.get_open_teams(),
   public.my_profile_id(), public.my_team_id(), public.is_team_member(uuid) to authenticated;
 

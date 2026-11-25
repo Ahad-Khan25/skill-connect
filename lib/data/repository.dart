@@ -55,5 +55,19 @@ abstract class Repository {
     List<String> domainTags = const [],
   });
 
+  /// Update an existing project's details (owner only).
+  Future<Team> updateTeam(
+    String teamId, {
+    required String title,
+    required String description,
+    required String projectType,
+    required List<String> rolesNeeded,
+    required List<String> requiredSkills,
+    required List<String> domainTags,
+  });
+
+  /// Remove a member from a project I own (and re-open their role).
+  Future<void> removeTeamMember(String teamId, String memberProfileId);
+
   Future<void> leaveTeam(String teamId);
 }

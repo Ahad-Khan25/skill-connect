@@ -143,6 +143,15 @@ class FakeRepository implements Repository {
           _Member(me.id, 'Owner'),
         ],
       ));
+
+      // Also add the demo user as a joined member ('Developer') on one of the sample teams
+      // (Iqra Shahid's "UrduEdu AI – Smart Study Tutor") so the "Joined Projects & My Responsibilities"
+      // screen has an immediate example ready to inspect!
+      final joinedSample = _teams.where((t) => t.id == sampleTeamId(1)).firstOrNull;
+      if (joinedSample != null && !joinedSample.members.any((m) => m.profileId == me.id)) {
+        joinedSample.members.add(_Member(me.id, 'Developer'));
+        joinedSample.rolesNeeded.remove('Developer');
+      }
     }
     _auth.add(true);
   }
@@ -392,6 +401,53 @@ class FakeRepository implements Repository {
     );
     _teams.insert(0, created);
     return _toTeamModel(created, me.id);
+  }
+
+  @override
+  Future<Team> updateTeam(
+    String teamId, {
+    required String title,
+    required String description,
+    required String projectType,
+    required List<String> rolesNeeded,
+    required List<String> requiredSkills,
+    required List<String> domainTags,
+  }) async {
+    await _delay();
+    final me = _requireMe();
+    final idx = _teams.indexWhere((t) => t.id == teamId);
+    if (idx < 0) throw const AppException('Project not found.');
+    final old = _teams[idx];
+    if (old.ownerId != me.id) throw const AppException('Only the project owner can edit project details.');
+    final updated = _Team(
+      id: old.id,
+      ownerId: old.ownerId,
+      title: title.trim(),
+      description: description.trim(),
+      projectType: projectType,
+      rolesNeeded: List.of(rolesNeeded),
+      requiredSkills: List.of(requiredSkills),
+      domainTags: List.of(domainTags),
+      members: List.of(old.members),
+    );
+    _teams[idx] = updated;
+    return _toTeamModel(updated, me.id);
+  }
+
+  @override
+  Future<void> removeTeamMember(String teamId, String memberProfileId) async {
+    await _delay();
+    final me = _requireMe();
+    final t = _teams.where((t) => t.id == teamId).firstOrNull;
+    if (t == null) throw const AppException('Project not found.');
+    if (t.ownerId != me.id) throw const AppException('Only the project owner can remove members.');
+    if (memberProfileId == me.id) throw const AppException('Use Disband Project to remove yourself as owner.');
+    final m = t.members.where((x) => x.profileId == memberProfileId).firstOrNull;
+    if (m == null) throw const AppException('Member not found in this project.');
+    t.members.remove(m);
+    if (kRoles.contains(m.role) && !t.rolesNeeded.contains(m.role)) {
+      t.rolesNeeded.add(m.role);
+    }
   }
 
   @override

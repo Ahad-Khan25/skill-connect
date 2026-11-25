@@ -103,6 +103,44 @@ const Map<String, List<String>> kRoleSkills = {
   'Data/ML Engineer': ['Python', 'Machine Learning', 'Deep Learning', 'Data Analysis'],
 };
 
+/// Default role responsibilities shown when a student views a project they joined.
+const Map<String, List<String>> kRoleResponsibilities = {
+  'Owner': [
+    'Coordinate project roadmap, milestones & weekly supervisor reviews',
+    'Review & integrate deliverables across development, design & testing',
+    'Manage team roles, project documentation & final presentation pitch',
+  ],
+  'Developer': [
+    'Architect and implement core mobile/web application features & UI flows',
+    'Integrate backend APIs, authentication, database queries & state management',
+    'Maintain clean Git branches, code reviews & release builds',
+  ],
+  'Designer': [
+    'Design high-fidelity wireframes, user flows & Figma prototypes',
+    'Maintain consistent design tokens (colors, typography, icons & spacing)',
+    'Conduct usability checks & ensure responsive layouts on mobile screens',
+  ],
+  'Tester': [
+    'Create test plans, edge-case scenarios & automated/manual QA checklists',
+    'Verify bug fixes, form validations, offline caching & device compatibility',
+    'Sign off on release APK stability before demonstrations',
+  ],
+  'Report Writer': [
+    'Draft SRS, system architecture diagrams (UML/ERD) & proposal documents',
+    'Maintain weekly progress logs, user manuals & final FYP/semester report',
+    'Prepare presentation slides & 2-minute demo script for evaluation',
+  ],
+  'Data/ML Engineer': [
+    'Collect, clean & preprocess datasets and build analytical/ML pipelines',
+    'Train, evaluate & optimize models and expose inference endpoints',
+    'Document model accuracy metrics, feature importance & evaluation charts',
+  ],
+  'Member': [
+    'Collaborate with the project lead on assigned module deliverables',
+    'Participate in weekly standups, testing & documentation updates',
+  ],
+};
+
 /// Validation limits.
 const int kMaxBioLength = 300;
 const int kMaxExperienceLength = 400;
